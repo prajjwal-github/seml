@@ -133,6 +133,18 @@ Screenshots of each dashboard are in [`docs/screenshots/roles`](docs/screenshots
 
 ---
 
+## Deploying (Netlify frontend + Render backend)
+
+Netlify only serves static sites, so the React app goes on Netlify and the FastAPI backend (PostgreSQL, background wipe worker, WebSockets) goes on Render's free tier.
+
+1. **Backend on Render**: Render dashboard → **New → Blueprint** → pick this repo → **Apply**. `render.yaml` creates the API service and a PostgreSQL database. On first start the database is seeded with the three demo accounts. Copy the service URL, e.g. `https://securewipe-api.onrender.com`.
+2. **Frontend on Netlify**: `netlify.toml` already sets the build (`frontend/`, `npm run build`, publish `dist`) and the SPA redirect. In **Site configuration → Environment variables** add `VITE_API_URL` = the Render URL (no trailing slash), then **Deploys → Trigger deploy**.
+3. If your Netlify address is not `https://secure-wipe-seml.netlify.app`, update `PUBLIC_APP_URL` and `CORS_ORIGINS` on the Render service. Any `*.netlify.app` origin is allowed by default.
+
+Free Render services sleep when idle, so the first request after a pause can take about 30–60 seconds.
+
+---
+
 ## 5. Technology Stack
 
 | Layer | Framework & Libraries | Description |

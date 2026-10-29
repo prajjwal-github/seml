@@ -59,7 +59,7 @@ export const AuditLogPage: React.FC = () => {
   }, [actionFilter]);
 
   const handleExportCsv = () => {
-    window.open('/api/v1/audit/export.csv', '_blank');
+    api.downloadAuditCsv().catch((err: any) => alert(err.message || 'Export failed'));
   };
 
   const filteredLogs = logs.filter((l) => {

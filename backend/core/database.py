@@ -12,8 +12,25 @@ from backend.core.config import settings
 import sys
 from sqlalchemy.pool import NullPool
 
+def _engine_url_and_args():
+    """asyncpg does not understand libpq's ?sslmode=... so translate it into connect_args."""
+    from sqlalchemy.engine import make_url
+
+    url = make_url(settings.DATABASE_URL)
+    connect_args = {}
+    sslmode = url.query.get("sslmode")
+    if sslmode:
+        url = url.difference_update_query(["sslmode", "channel_binding"])
+        if sslmode in ("require", "verify-ca", "verify-full"):
+            connect_args["ssl"] = "require"
+    return url, connect_args
+
+
+_db_url, _connect_args = _engine_url_and_args()
+
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    _db_url,
+    connect_args=_connect_args,
     echo=False,
     pool_pre_ping=True,
     poolclass=NullPool if "pytest" in sys.modules else None,

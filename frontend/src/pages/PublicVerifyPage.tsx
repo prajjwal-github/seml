@@ -14,6 +14,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { apiUrl } from '../lib/config';
 import { SimulationBanner } from '../components/common/SimulationBanner';
 import { formatDate } from '../lib/utils';
 
@@ -117,7 +118,7 @@ export const PublicVerifyPage: React.FC = () => {
 
         <div className="flex items-center space-x-3 text-xs">
           <a
-            href="/.well-known/wipe-keys"
+            href={apiUrl('/.well-known/wipe-keys')}
             target="_blank"
             rel="noreferrer"
             className="text-muted-foreground hover:text-foreground flex items-center gap-1 font-mono text-[11px]"

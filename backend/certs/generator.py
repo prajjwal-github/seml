@@ -163,7 +163,7 @@ def generate_pdf_certificate(
     c.line(45, y - 4, width - 45, y - 4)
 
     # Generate QR Code in-memory
-    verify_url = f"http://localhost:5173/verify/{cert_id}"
+    verify_url = f"{settings.PUBLIC_APP_URL.rstrip('/')}/verify/{cert_id}"
     qr = qrcode.QRCode(box_size=3, border=1)
     qr.add_data(verify_url)
     qr.make(fit=True)

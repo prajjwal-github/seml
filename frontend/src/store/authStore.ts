@@ -31,6 +31,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const data = await api.login({ email, password });
+      if (!data || typeof data !== 'object' || !data.access_token) {
+        // e.g. a static host answered with index.html because VITE_API_URL is not set
+        throw {
+          code: 0,
+          message: 'The SecureWipe backend is not connected. Set VITE_API_URL to the backend URL and redeploy.',
+        };
+      }
       localStorage.setItem('securewipe_access_token', data.access_token);
       localStorage.setItem('securewipe_refresh_token', data.refresh_token);
       localStorage.setItem('securewipe_user', JSON.stringify(data.user));

@@ -3,7 +3,7 @@
  * Handles JWT bearer injection, token refresh, and structured error propagation.
  */
 
-const BASE_URL = '/api/v1';
+import { API_BASE as BASE_URL, apiUrl } from './config';
 
 export interface ApiError {
   code: number;
@@ -27,11 +27,21 @@ export async function apiRequest<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const url = endpoint.startsWith('http') || endpoint.startsWith('/api') || endpoint.startsWith('/.well-known')
+  const url = endpoint.startsWith('http')
     ? endpoint
+    : endpoint.startsWith('/api') || endpoint.startsWith('/.well-known')
+    ? apiUrl(endpoint)
     : `${BASE_URL}${endpoint}`;
 
-  let res = await fetch(url, { ...options, headers });
+  let res: Response;
+  try {
+    res = await fetch(url, { ...options, headers });
+  } catch {
+    throw {
+      code: 0,
+      message: 'Cannot reach the SecureWipe server. Check that the backend is running and VITE_API_URL is set.',
+    } as ApiError;
+  }
 
   // Handle 401 unauthorized: attempt token refresh
   if (res.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/refresh')) {
@@ -92,6 +102,37 @@ export async function apiRequest<T = any>(
     return (await res.json()) as T;
   }
   return (await res.text()) as unknown as T;
+}
+
+/** Downloads a file from an authenticated endpoint (raw links can't carry the bearer token). */
+async function downloadFile(endpoint: string, filename: string): Promise<void> {
+  const send = () =>
+    fetch(`${BASE_URL}${endpoint}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('securewipe_access_token') ?? ''}` },
+    });
+  let res = await send();
+  if (res.status === 401) {
+    await apiRequest('/auth/me').catch(() => undefined); // triggers a token refresh
+    res = await send();
+  }
+  if (!res.ok) {
+    let message = `Download failed (${res.status})`;
+    try {
+      message = (await res.json()).message || message;
+    } catch {
+      // not JSON
+    }
+    throw { code: res.status, message } as ApiError;
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export const api = {
@@ -162,36 +203,9 @@ export const api = {
     return apiRequest(`/certificates${query}`);
   },
   getCertificate: (id: string) => apiRequest(`/certificates/${id}`),
-  downloadCertificatePdf: async (certificateId: string) => {
-    // The PDF endpoint needs the bearer token, so fetch it as a blob rather than opening a raw URL
-    const send = () =>
-      fetch(`${BASE_URL}/certificates/${encodeURIComponent(certificateId)}/pdf`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('securewipe_access_token') ?? ''}` },
-      });
-    let res = await send();
-    if (res.status === 401) {
-      await apiRequest('/auth/me').catch(() => undefined); // triggers a token refresh
-      res = await send();
-    }
-    if (!res.ok) {
-      let message = `Download failed (${res.status})`;
-      try {
-        message = (await res.json()).message || message;
-      } catch {
-        // not JSON
-      }
-      throw { code: res.status, message } as ApiError;
-    }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${certificateId}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  },
+  downloadCertificatePdf: (certificateId: string) =>
+    downloadFile(`/certificates/${encodeURIComponent(certificateId)}/pdf`, `${certificateId}.pdf`),
+  downloadAuditCsv: () => downloadFile('/audit/export.csv', 'audit_log.csv'),
   revokeCertificate: (id: string, reason: string) =>
     apiRequest(`/certificates/${id}/revoke`, {
       method: 'POST',
