@@ -56,11 +56,8 @@ export const ApprovalsInboxPage: React.FC = () => {
     setActionError(null);
     try {
       if (modalType === 'approve') {
-        const res = await api.approveRequest(selectedReq.id, comment);
-        if (res.raw_token) {
-          localStorage.setItem(`securewipe_token_${selectedReq.id}`, res.raw_token);
-        }
-        setActionSuccess(`Approval recorded! Single-use authorization token: ${res.raw_token}`);
+        await api.approveRequest(selectedReq.id, comment);
+        setActionSuccess('Approved. The wipe has started and the certificate will be issued automatically.');
       } else {
         await api.rejectRequest(selectedReq.id, comment);
         setActionSuccess(`Request rejected.`);
@@ -88,9 +85,9 @@ export const ApprovalsInboxPage: React.FC = () => {
             <CheckSquare className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-2xl font-extrabold tracking-tight text-foreground">Dual-Custody Approvals Inbox</h1>
+            <h1 className="text-2xl font-extrabold tracking-tight text-foreground">Approvals Inbox</h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Strict four-eyes authorization gate. Requester can NEVER approve their own request.
+              Certificate requests from operators. A requester can never approve their own request.
             </p>
           </div>
         </div>
@@ -168,14 +165,10 @@ export const ApprovalsInboxPage: React.FC = () => {
                   <p className="text-foreground">{req.reason}</p>
                 </div>
 
-                {/* Dual-Approver Indicator if High Risk */}
                 {isHighRisk && (
-                  <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 rounded-lg text-[11px] text-rose-700 dark:text-rose-400 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 font-semibold">
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                      High-Risk Policy: Requires 2 distinct approvers
-                    </span>
-                    <span className="font-mono font-bold">1 of 2 Approved</span>
+                  <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 rounded-lg text-[11px] text-rose-700 dark:text-rose-400 flex items-center gap-1.5 font-semibold">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Includes a system volume or the Purge method. Check before approving.
                   </div>
                 )}
 
@@ -188,7 +181,7 @@ export const ApprovalsInboxPage: React.FC = () => {
                     </div>
                   ) : (
                     <span className="text-muted-foreground text-[11px]">
-                      Approval computes SHA-256 request fingerprint and issues single-use token.
+                      Approving starts the certified wipe and issues a signed certificate.
                     </span>
                   )}
 
@@ -204,7 +197,7 @@ export const ApprovalsInboxPage: React.FC = () => {
                       Reject
                     </button>
                     <button
-                      disabled={isRequester || (user?.role !== 'APPROVER' && user?.role !== 'ADMIN')}
+                      disabled={isRequester || user?.role !== 'APPROVER'}
                       onClick={() => {
                         setSelectedReq(req);
                         setModalType('approve');

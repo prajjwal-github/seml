@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.deps import get_current_user, get_db
+from backend.api.deps import get_db, require_roles
 from backend.core.audit import verify_audit_chain
 from backend.models import AuditLog, User, UserRole
 from backend.schemas.audit import AuditChainVerifyResponse, AuditLogResponse
@@ -21,7 +21,7 @@ async def list_audit_logs(
     entity_type: Optional[str] = Query(None, description="Filter by entity type"),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.APPROVER])),
     session: AsyncSession = Depends(get_db),
 ):
     """Lists chronological audit log records with filtering and pagination."""
@@ -48,7 +48,7 @@ async def list_audit_logs(
 
 @router.get("/verify-chain", response_model=AuditChainVerifyResponse)
 async def verify_chain_integrity(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.APPROVER])),
     session: AsyncSession = Depends(get_db),
 ):
     """Cryptographically verifies the append-only SHA-256 hash chain from genesis to current entry."""
@@ -62,7 +62,7 @@ async def verify_chain_integrity(
 
 @router.get("/export.csv")
 async def export_audit_logs_csv(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_roles([UserRole.ADMIN, UserRole.APPROVER])),
     session: AsyncSession = Depends(get_db),
 ):
     """Exports full hash-chained audit log records to CSV."""

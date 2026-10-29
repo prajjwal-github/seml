@@ -84,43 +84,55 @@ docker compose up -d
 docker compose exec backend python seed.py
 ```
 
-### Option B: Local Development (Windows / Native Host)
-```bash
-# 1. Activate Python virtual environment and install dependencies
+### Option B: Run locally from VS Code (Windows)
+
+Prerequisites: Python 3.12+, Node.js 20+, PostgreSQL (the scripts expect it on port **5434**, user/password `postgres`/`postgres`, database `securewipe`).
+
+One-time setup (VS Code terminal, in the repo folder):
+```powershell
 python -m venv .venv
 .\.venv\Scripts\activate
 pip install -r backend/requirements.txt
-pip install -e agent/
-
-# 2. Start PostgreSQL daemon (e.g. port 5434)
-& "C:\Program Files\PostgreSQL\18\bin\postgres.exe" -D "d:\seml\pgdata" -p 5434
-
-# 3. Apply database migrations and seed data
-python backend/seed.py
-
-# 4. Start FastAPI backend
-uvicorn backend.app.main:app --host 127.0.0.1 --port 8001
-
-# 5. Start Vite frontend
-cd frontend
-npm install
-npm run dev
+cd frontend; npm install; cd ..
 ```
+
+Every time:
+```powershell
+.\run.ps1        # or run.bat: starts PostgreSQL (5434), the API (8001) and the website (5173)
+```
+
+Or start the pieces by hand in three terminals:
+```powershell
+& "C:\Program Files\PostgreSQL\18\bin\postgres.exe" -D ".\pgdata" -p 5434
+.\.venv\Scripts\uvicorn backend.app.main:app --host 127.0.0.1 --port 8001 --reload
+cd frontend; npm run dev
+```
+
+On first start the backend creates the tables and loads the three demo accounts and 16 sample devices automatically (you can also run `python -m backend.seed`).
 
 Visit the frontend at **`http://127.0.0.1:5173`**.
 
 ---
 
-## 4. Default Seeded Personas
+## 4. Roles and Dashboards
 
-The application includes four pre-configured personas with quick-login selectors in the top navigation bar:
+The platform has exactly **three roles**, and each one signs in to its own dashboard:
 
-| Persona | Email | Password | Role | Primary Permissions |
-| :--- | :--- | :--- | :--- | :--- |
-| **Alex Vance** | `operator@securewipe.local` | `Operator123!` | `OPERATOR` | Asset inspection, wipe requests, starting approved jobs. |
-| **Sarah Connor** | `approver@securewipe.local` | `Approver123!` | `APPROVER` | Dual-custody review, four-eyes gate, single-use token issuance. |
-| **Marcus Wright** | `admin@securewipe.local` | `Admin123!` | `ADMIN` | Second approver for high risk, user management, certificate revocation. |
-| **Elena Rostova** | `auditor@securewipe.local` | `Auditor123!` | `AUDITOR` | Compliance audit, public key inspection, hash chain verification. |
+| Role | Demo login | Password | Dashboard |
+| :--- | :--- | :--- | :--- |
+| **Admin** (asset registry) | `admin@securewipe.local` | `Admin123!` | Registers and manages every office device (manual form, browser detection, CSV import), sees certificate status per device, manages users, audit log. |
+| **Operator** (device owner / user) | `operator@securewipe.local` | `Operator123!` | Picks a registered device and submits a wipe-certificate request, tracks it live (Requested → Approved → Data wiped → Certificate) and downloads the signed PDF. |
+| **Approver** (certifying authority) | `approver@securewipe.local` | `Approver123!` | Reviews pending requests and approves or rejects them (rejection needs a reason the operator sees). |
+
+### Certificate workflow
+
+1. **Admin** adds the device to the registry.
+2. **Operator** requests a certificate for it (confirms by typing the serial number). Only one open request per device.
+3. **Approver** approves or rejects. A requester can never approve their own request.
+4. On approval the simulated NIST SP 800-88 wipe is queued automatically, verified, and an **Ed25519-signed PDF certificate** with a verification QR code is issued.
+5. The Operator (and Admin/Approver) download the PDF; anyone can verify it at `/verify`.
+
+Screenshots of each dashboard are in [`docs/screenshots/roles`](docs/screenshots/roles).
 
 ---
 

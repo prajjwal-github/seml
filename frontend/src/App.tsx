@@ -12,11 +12,9 @@ import { CertificatesPage } from './pages/CertificatesPage';
 import { PublicVerifyPage } from './pages/PublicVerifyPage';
 import { AuditLogPage } from './pages/AuditLogPage';
 import { AdminSettingsPage } from './pages/AdminSettingsPage';
+import { UserRole } from './types';
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean }> = ({
-  children,
-  adminOnly = false,
-}) => {
+const ProtectedRoute: React.FC<{ children: React.ReactNode; roles?: UserRole[] }> = ({ children, roles }) => {
   const { isAuthenticated, isLoading, user } = useAuthStore();
   const location = useLocation();
 
@@ -32,7 +30,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; adminOnly?: boolean 
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (adminOnly && user?.role !== 'ADMIN') {
+  if (roles && (!user || !roles.includes(user.role))) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -64,16 +62,44 @@ export const App: React.FC = () => {
         >
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/devices" element={<DevicesPage />} />
+          <Route
+            path="/devices"
+            element={
+              <ProtectedRoute roles={['ADMIN', 'OPERATOR']}>
+                <DevicesPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/devices/:id" element={<DeviceDetailPage />} />
-          <Route path="/approvals" element={<ApprovalsInboxPage />} />
-          <Route path="/jobs" element={<LiveJobsPage />} />
+          <Route
+            path="/approvals"
+            element={
+              <ProtectedRoute roles={['APPROVER']}>
+                <ApprovalsInboxPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/jobs"
+            element={
+              <ProtectedRoute roles={['APPROVER', 'ADMIN']}>
+                <LiveJobsPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/certificates" element={<CertificatesPage />} />
-          <Route path="/audit" element={<AuditLogPage />} />
+          <Route
+            path="/audit"
+            element={
+              <ProtectedRoute roles={['ADMIN', 'APPROVER']}>
+                <AuditLogPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/admin"
             element={
-              <ProtectedRoute adminOnly>
+              <ProtectedRoute roles={['ADMIN']}>
                 <AdminSettingsPage />
               </ProtectedRoute>
             }

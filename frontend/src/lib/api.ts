@@ -3,7 +3,7 @@
  * Handles JWT bearer injection, token refresh, and structured error propagation.
  */
 
-const BASE_URL = '/api/v1';
+import { API_BASE as BASE_URL, apiUrl } from './config';
 
 export interface ApiError {
   code: number;
@@ -17,8 +17,9 @@ export async function apiRequest<T = any>(
 ): Promise<T> {
   const token = localStorage.getItem('securewipe_access_token');
 
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers as Record<string, string>),
   };
 
@@ -26,11 +27,21 @@ export async function apiRequest<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const url = endpoint.startsWith('http') || endpoint.startsWith('/api') || endpoint.startsWith('/.well-known')
+  const url = endpoint.startsWith('http')
     ? endpoint
+    : endpoint.startsWith('/api') || endpoint.startsWith('/.well-known')
+    ? apiUrl(endpoint)
     : `${BASE_URL}${endpoint}`;
 
-  let res = await fetch(url, { ...options, headers });
+  let res: Response;
+  try {
+    res = await fetch(url, { ...options, headers });
+  } catch {
+    throw {
+      code: 0,
+      message: 'Cannot reach the SecureWipe server. Check that the backend is running and VITE_API_URL is set.',
+    } as ApiError;
+  }
 
   // Handle 401 unauthorized: attempt token refresh
   if (res.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/refresh')) {
@@ -67,9 +78,16 @@ export async function apiRequest<T = any>(
     };
     try {
       const parsed = await res.json();
+      let message = parsed.message || parsed.detail || errData.message;
+      if (Array.isArray(message)) {
+        // FastAPI validation errors: [{loc, msg}, ...]
+        message = message
+          .map((e: any) => `${(e.loc || []).filter((p: any) => p !== 'body').join('.')}: ${e.msg}`)
+          .join('; ');
+      }
       errData = {
         code: parsed.code || res.status,
-        message: parsed.message || parsed.detail || errData.message,
+        message: String(message),
         details: parsed.details,
       };
     } catch {
@@ -86,6 +104,37 @@ export async function apiRequest<T = any>(
   return (await res.text()) as unknown as T;
 }
 
+/** Downloads a file from an authenticated endpoint (raw links can't carry the bearer token). */
+async function downloadFile(endpoint: string, filename: string): Promise<void> {
+  const send = () =>
+    fetch(`${BASE_URL}${endpoint}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('securewipe_access_token') ?? ''}` },
+    });
+  let res = await send();
+  if (res.status === 401) {
+    await apiRequest('/auth/me').catch(() => undefined); // triggers a token refresh
+    res = await send();
+  }
+  if (!res.ok) {
+    let message = `Download failed (${res.status})`;
+    try {
+      message = (await res.json()).message || message;
+    } catch {
+      // not JSON
+    }
+    throw { code: res.status, message } as ApiError;
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export const api = {
   // Auth
   login: (credentials: { email: string; password: string }) =>
@@ -100,8 +149,14 @@ export const api = {
   },
   getDevice: (id: string) => apiRequest(`/devices/${id}`),
   createDevice: (data: any) => apiRequest('/devices', { method: 'POST', body: JSON.stringify(data) }),
-  importDevicesCsv: (csvContent: string) =>
-    apiRequest('/devices/import-csv', { method: 'POST', body: JSON.stringify({ csv_content: csvContent }) }),
+  updateDevice: (id: string, data: any) =>
+    apiRequest(`/devices/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteDevice: (id: string) => apiRequest(`/devices/${id}`, { method: 'DELETE' }),
+  importDevicesCsv: (csvContent: string) => {
+    const form = new FormData();
+    form.append('file', new Blob([csvContent], { type: 'text/csv' }), 'devices.csv');
+    return apiRequest('/devices/import-csv', { method: 'POST', body: form });
+  },
 
   // Wipe Requests
   createWipeRequest: (data: {
@@ -148,6 +203,9 @@ export const api = {
     return apiRequest(`/certificates${query}`);
   },
   getCertificate: (id: string) => apiRequest(`/certificates/${id}`),
+  downloadCertificatePdf: (certificateId: string) =>
+    downloadFile(`/certificates/${encodeURIComponent(certificateId)}/pdf`, `${certificateId}.pdf`),
+  downloadAuditCsv: () => downloadFile('/audit/export.csv', 'audit_log.csv'),
   revokeCertificate: (id: string, reason: string) =>
     apiRequest(`/certificates/${id}/revoke`, {
       method: 'POST',

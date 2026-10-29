@@ -4,10 +4,16 @@ from enum import Enum
 
 
 class UserRole(str, Enum):
+    """The three platform roles.
+
+    ADMIN    - registers and manages the office devices (asset registry).
+    OPERATOR - device owner/user who requests a wipe certificate for a device.
+    APPROVER - certifying authority who approves or rejects certificate requests.
+    """
+
     OPERATOR = "OPERATOR"
     APPROVER = "APPROVER"
     ADMIN = "ADMIN"
-    AUDITOR = "AUDITOR"
 
 
 class DeviceCategory(str, Enum):

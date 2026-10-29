@@ -50,7 +50,7 @@ export const WipeRequestWizardModal: React.FC<WipeRequestWizardModalProps> = ({
   };
 
   const handleSubmit = async () => {
-    if (serialConfirm.trim() !== device.serial_number) {
+    if (serialConfirm.trim().toLowerCase() !== device.serial_number.trim().toLowerCase()) {
       setErrorMsg(`Typed serial does not match device serial (${device.serial_number})`);
       return;
     }
@@ -84,7 +84,7 @@ export const WipeRequestWizardModal: React.FC<WipeRequestWizardModalProps> = ({
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-primary/10 text-primary font-bold">
                 Step {step} of 4
               </span>
-              <h3 className="text-base font-bold text-foreground">Wipe Request Wizard</h3>
+              <h3 className="text-base font-bold text-foreground">Request Wipe Certificate</h3>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
               {device.manufacturer} {device.model} ({device.serial_number})
@@ -256,12 +256,13 @@ export const WipeRequestWizardModal: React.FC<WipeRequestWizardModalProps> = ({
                   <div className="text-[11px] text-rose-600 dark:text-rose-400 flex items-start gap-1.5">
                     <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                     <span>
-                      High risk triggered: System volume selected or Purge method requested. Under corporate policy, <strong>two distinct approvers</strong> will be required before this request can be queued.
+                      High risk: a system volume is selected or the Purge method was chosen. The Approver will see this
+                      flag when reviewing your request.
                     </span>
                   </div>
                 ) : (
                   <p className="text-[11px] text-muted-foreground">
-                    Standard risk: Requires 1 distinct approver under the four-eyes rule.
+                    Standard risk. The request goes to the Approver for a decision.
                   </p>
                 )}
               </div>
@@ -300,7 +301,9 @@ export const WipeRequestWizardModal: React.FC<WipeRequestWizardModalProps> = ({
               <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 text-[11px] flex items-start gap-2">
                 <Info className="h-4 w-4 shrink-0 mt-0.5" />
                 <p>
-                  <strong>Dual-Custody Gate:</strong> Submitting will create a request in <code className="font-mono">PENDING_APPROVAL</code> status. No data will be simulated or wiped until approved by an independent reviewer.
+                  <strong>What happens next:</strong> your request goes to the Approver. Nothing is wiped until it is
+                  approved; after approval the wipe runs automatically and your signed PDF certificate appears on your
+                  dashboard.
                 </p>
               </div>
             </div>
@@ -342,7 +345,7 @@ export const WipeRequestWizardModal: React.FC<WipeRequestWizardModalProps> = ({
               disabled={submitting || serialConfirm.trim() !== device.serial_number}
               className="px-4 py-2 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5"
             >
-              <span>{submitting ? 'Submitting...' : 'Submit Wipe Request'}</span>
+              <span>{submitting ? 'Submitting...' : 'Submit certificate request'}</span>
               <CheckCircle2 className="h-3.5 w-3.5" />
             </button>
           )}

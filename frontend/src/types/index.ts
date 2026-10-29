@@ -1,4 +1,9 @@
-export type UserRole = 'OPERATOR' | 'APPROVER' | 'ADMIN' | 'AUDITOR';
+/**
+ * ADMIN    - registers and manages the office devices.
+ * OPERATOR - requests a wipe certificate for a device.
+ * APPROVER - approves or rejects certificate requests.
+ */
+export type UserRole = 'OPERATOR' | 'APPROVER' | 'ADMIN';
 
 export interface User {
   id: string;
@@ -81,6 +86,11 @@ export interface Device {
   detected_by?: string;
   detection_confidence?: number;
   status: DeviceStatus;
+  // Certificate lifecycle derived from the device's latest request ('NONE' when never requested)
+  wipe_status?: RequestStatus | 'NONE';
+  latest_request_id?: string;
+  certificate_id?: string;
+  volumes_count?: number;
   agent_id?: string;
   is_online?: boolean;
   volumes?: StorageVolume[];
@@ -124,7 +134,15 @@ export interface WipeRequest {
   created_at: string;
   updated_at: string;
   device_name?: string;
+  device_serial?: string;
+  device_category?: DeviceCategory;
   requester_name?: string;
+  approver_name?: string;
+  decision_comment?: string;
+  job_id?: string;
+  job_status?: string;
+  job_progress?: number;
+  certificate_id?: string;
 }
 
 export interface Approval {
@@ -158,6 +176,8 @@ export interface WipeJob {
   created_at: string;
   updated_at: string;
   device_model?: string;
+  device_name?: string;
+  certificate_id?: string;
   method?: string;
 }
 

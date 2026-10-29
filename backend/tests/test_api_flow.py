@@ -24,117 +24,108 @@ async def test_health_check(client):
     assert data["mode"] == "simulation"
 
 
-@pytest.mark.asyncio
-async def test_full_lifecycle_and_negative_paths(client):
-    """Verifies the complete dual-custody lifecycle and asserts all mandatory negative paths."""
-    # 1. Login as Operator
-    op_login = await client.post(
-        "/api/v1/auth/login",
-        json={"email": "operator@securewipe.local", "password": "Operator123!"},
-    )
-    assert op_login.status_code == 200
-    op_token = op_login.json()["access_token"]
-    op_headers = {"Authorization": f"Bearer {op_token}"}
+async def _login(client, email, password):
+    res = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    assert res.status_code == 200
+    return {"Authorization": f"Bearer {res.json()['access_token']}"}
 
-    # 2. Login as Approver
-    appr_login = await client.post(
-        "/api/v1/auth/login",
-        json={"email": "approver@securewipe.local", "password": "Approver123!"},
-    )
-    assert appr_login.status_code == 200
-    appr_token = appr_login.json()["access_token"]
-    appr_headers = {"Authorization": f"Bearer {appr_token}"}
 
-    # 3. List devices
-    dev_res = await client.get("/api/v1/devices", headers=op_headers)
-    assert dev_res.status_code == 200
-    devices = dev_res.json()
-    assert len(devices) >= 16
-
-    target_device = None
-    volume_ids = []
-    for d in devices:
-        detail_res = await client.get(f"/api/v1/devices/{d['id']}", headers=op_headers)
-        vols = detail_res.json().get("volumes", [])
-        if vols:
-            target_device = d
-            volume_ids = [v["id"] for v in vols]
-            break
-
-    assert target_device is not None
-    device_id = target_device["id"]
-    serial_number = target_device["serial_number"]
-
-    # 4. Operator submits wipe request
-    req_res = await client.post(
-        "/api/v1/wipe-requests",
-        headers=op_headers,
+async def _admin_registers_device(client, admin_headers):
+    serial = f"TEST-{uuid.uuid4().hex[:10].upper()}"
+    res = await client.post(
+        "/api/v1/devices",
+        headers=admin_headers,
         json={
-            "device_id": device_id,
-            "volume_ids": volume_ids,
-            "method": "NIST_800_88_CLEAR",
-            "reason": "Test Lifecycle Request",
-            "confirm_serial": serial_number,
+            "category": "LAPTOP",
+            "manufacturer": "Dell",
+            "model": "Latitude 7440",
+            "serial_number": serial,
+            "volumes": [{"name": "NVMe 512GB", "size_bytes": 512 * 1024**3, "media_type": "NVME_SSD"}],
         },
     )
+    assert res.status_code == 201, res.text
+    dev = res.json()
+    return dev["id"], serial, [v["id"] for v in dev["volumes"]]
+
+
+@pytest.mark.asyncio
+async def test_full_lifecycle_and_negative_paths(client):
+    """Admin adds device -> Operator requests certificate -> Approver approves -> job auto-queued."""
+    op_headers = await _login(client, "operator@securewipe.local", "Operator123!")
+    appr_headers = await _login(client, "approver@securewipe.local", "Approver123!")
+    admin_headers = await _login(client, "admin@securewipe.local", "Admin123!")
+
+    # Only the Admin can register devices
+    op_dev = await client.post(
+        "/api/v1/devices",
+        headers=op_headers,
+        json={"serial_number": "OP-NOT-ALLOWED", "volumes": [{"name": "disk"}]},
+    )
+    assert op_dev.status_code == 403
+
+    device_id, serial_number, volume_ids = await _admin_registers_device(client, admin_headers)
+
+    # Duplicate serial is refused
+    dup = await client.post(
+        "/api/v1/devices",
+        headers=admin_headers,
+        json={"serial_number": serial_number, "volumes": [{"name": "disk"}]},
+    )
+    assert dup.status_code == 409
+
+    request_body = {
+        "device_id": device_id,
+        "volume_ids": volume_ids,
+        "method": "NIST_800_88_CLEAR",
+        "reason": "Test Lifecycle Request",
+        "confirm_serial": serial_number,
+    }
+
+    # Admin and Approver cannot submit certificate requests
+    assert (await client.post("/api/v1/wipe-requests", headers=admin_headers, json=request_body)).status_code == 403
+    assert (await client.post("/api/v1/wipe-requests", headers=appr_headers, json=request_body)).status_code == 403
+
+    # Operator submits the certificate request
+    req_res = await client.post("/api/v1/wipe-requests", headers=op_headers, json=request_body)
     assert req_res.status_code == 201
     wipe_req = req_res.json()
     request_id = wipe_req["id"]
     assert wipe_req["status"] == "PENDING_APPROVAL"
+    assert wipe_req["device_serial"] == serial_number
 
-    # NEGATIVE PATH 1: Start job without approval -> 409 Conflict
-    fake_token = "a" * 64
+    # A second request for the same device while one is open -> 409
+    assert (await client.post("/api/v1/wipe-requests", headers=op_headers, json=request_body)).status_code == 409
+
+    # Device shows the in-flight request
+    devs = (await client.get("/api/v1/devices", headers=admin_headers)).json()
+    assert next(d for d in devs if d["id"] == device_id)["wipe_status"] == "PENDING_APPROVAL"
+
+    # NEGATIVE PATH: Start job without approval -> 409 Conflict
     unapproved_job_res = await client.post(
         "/api/v1/jobs/start",
         headers=op_headers,
-        json={"request_id": request_id, "token": fake_token},
+        json={"request_id": request_id, "token": "a" * 64},
     )
     assert unapproved_job_res.status_code == 409
 
-    # NEGATIVE PATH 2a: Operator attempts approval -> 403 Forbidden (RBAC)
-    self_appr_res = await client.post(
-        f"/api/v1/approvals/{request_id}/approve",
-        headers=op_headers,
-        json={"decision": "APPROVED", "comment": "Operator trying to approve"},
-    )
-    assert self_appr_res.status_code == 403
+    # NEGATIVE PATH: Operator or Admin attempting approval -> 403 Forbidden (RBAC)
+    for headers in (op_headers, admin_headers):
+        res = await client.post(
+            f"/api/v1/approvals/{request_id}/approve",
+            headers=headers,
+            json={"decision": "APPROVED", "comment": "not allowed"},
+        )
+        assert res.status_code == 403
 
-    # NEGATIVE PATH 2b: Admin creates request and attempts self-approval -> 403 (Four-Eyes Violation)
-    admin_login = await client.post(
-        "/api/v1/auth/login",
-        json={"email": "admin@securewipe.local", "password": "Admin123!"},
-    )
-    assert admin_login.status_code == 200
-    admin_headers = {"Authorization": f"Bearer {admin_login.json()['access_token']}"}
-    admin_req = await client.post(
-        "/api/v1/wipe-requests",
-        headers=admin_headers,
-        json={
-            "device_id": device_id,
-            "volume_ids": volume_ids,
-            "method": "NIST_800_88_CLEAR",
-            "reason": "Admin test request",
-            "confirm_serial": serial_number,
-        },
-    )
-    assert admin_req.status_code == 201
-    admin_req_id = admin_req.json()["id"]
+    # Operators cannot see the approvals inbox
+    assert (await client.get("/api/v1/approvals/inbox", headers=op_headers)).status_code == 403
 
-    admin_self_appr = await client.post(
-        f"/api/v1/approvals/{admin_req_id}/approve",
-        headers=admin_headers,
-        json={"decision": "APPROVED", "comment": "Admin trying self-approval"},
-    )
-    assert admin_self_appr.status_code == 403
-    assert "Four-eyes rule violation" in admin_self_appr.json()["message"]
-
-    # 5. Distinct Approver views Approvals Inbox
+    # Approver sees the request in the inbox
     inbox_res = await client.get("/api/v1/approvals/inbox", headers=appr_headers)
     assert inbox_res.status_code == 200
-    inbox_items = inbox_res.json()
-    assert any(item["id"] == request_id for item in inbox_items)
+    assert any(item["id"] == request_id for item in inbox_res.json())
 
-    # 6. Approver approves the request -> returns single-use token
+    # Approver approves -> the wipe job is queued automatically
     appr_res = await client.post(
         f"/api/v1/approvals/{request_id}/approve",
         headers=appr_headers,
@@ -142,10 +133,15 @@ async def test_full_lifecycle_and_negative_paths(client):
     )
     assert appr_res.status_code == 200
     appr_data = appr_res.json()
+    assert appr_data["job_id"] is not None
     single_use_token = appr_data["raw_token"]
-    assert single_use_token is not None
 
-    # NEGATIVE PATH 3: Approving already approved by same approver -> 409 Conflict
+    detail = (await client.get(f"/api/v1/wipe-requests/{request_id}", headers=op_headers)).json()
+    assert detail["status"] == "QUEUED"
+    assert detail["job_id"] == appr_data["job_id"]
+    assert detail["approver_name"]
+
+    # NEGATIVE PATH: approving twice -> 409 Conflict
     re_appr_res = await client.post(
         f"/api/v1/approvals/{request_id}/approve",
         headers=appr_headers,
@@ -153,28 +149,7 @@ async def test_full_lifecycle_and_negative_paths(client):
     )
     assert re_appr_res.status_code == 409
 
-    # 6b. Second distinct approver (Admin) approves high-risk request to satisfy 2-approver threshold
-    admin_appr_res = await client.post(
-        f"/api/v1/approvals/{request_id}/approve",
-        headers=admin_headers,
-        json={"decision": "APPROVED", "comment": "Second distinct approver for high risk"},
-    )
-    assert admin_appr_res.status_code == 200
-    if admin_appr_res.json().get("raw_token"):
-        single_use_token = admin_appr_res.json()["raw_token"]
-
-    # 7. Operator starts the wipe job using the single-use token
-    start_job_res = await client.post(
-        "/api/v1/jobs/start",
-        headers=op_headers,
-        json={"request_id": request_id, "token": single_use_token},
-    )
-    assert start_job_res.status_code == 201
-    job_data = start_job_res.json()
-    job_id = job_data["id"]
-    assert job_data["status"] == "QUEUED"
-
-    # NEGATIVE PATH 4: Reusing an already used token -> 409 Conflict
+    # NEGATIVE PATH: a job already exists, so a manual start with the token -> 409
     reuse_token_res = await client.post(
         "/api/v1/jobs/start",
         headers=op_headers,
@@ -182,14 +157,11 @@ async def test_full_lifecycle_and_negative_paths(client):
     )
     assert reuse_token_res.status_code == 409
 
-    # 8. Verify audit log hash chain integrity
-    admin_login = await client.post(
-        "/api/v1/auth/login",
-        json={"email": "admin@securewipe.local", "password": "Admin123!"},
-    )
-    admin_token = admin_login.json()["access_token"]
-    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+    # Operator only sees their own requests
+    own = (await client.get("/api/v1/wipe-requests", headers=op_headers)).json()
+    assert own and all(r["requester_name"] for r in own)
 
+    # Verify audit log hash chain integrity
     chain_res = await client.get("/api/v1/audit/verify-chain", headers=admin_headers)
     assert chain_res.status_code == 200
     chain_data = chain_res.json()
@@ -231,3 +203,59 @@ async def test_full_lifecycle_and_negative_paths(client):
     )
     assert tamper_res.status_code == 200
     assert tamper_res.json()["status"] == "TAMPERED"
+
+
+@pytest.mark.asyncio
+async def test_rejection_flow(client):
+    """Approver rejects with a mandatory reason, and the Operator can see why."""
+    op_headers = await _login(client, "operator@securewipe.local", "Operator123!")
+    appr_headers = await _login(client, "approver@securewipe.local", "Approver123!")
+    admin_headers = await _login(client, "admin@securewipe.local", "Admin123!")
+
+    device_id, serial, volume_ids = await _admin_registers_device(client, admin_headers)
+    req = await client.post(
+        "/api/v1/wipe-requests",
+        headers=op_headers,
+        json={
+            "device_id": device_id,
+            "volume_ids": volume_ids,
+            "method": "NIST_800_88_PURGE",
+            "reason": "Resale",
+            "confirm_serial": serial,
+        },
+    )
+    assert req.status_code == 201
+    request_id = req.json()["id"]
+
+    no_reason = await client.post(
+        f"/api/v1/approvals/{request_id}/reject", headers=appr_headers, json={"decision": "REJECTED"}
+    )
+    assert no_reason.status_code == 400
+
+    rej = await client.post(
+        f"/api/v1/approvals/{request_id}/reject",
+        headers=appr_headers,
+        json={"decision": "REJECTED", "comment": "Asset tag missing"},
+    )
+    assert rej.status_code == 200
+
+    detail = (await client.get(f"/api/v1/wipe-requests/{request_id}", headers=op_headers)).json()
+    assert detail["status"] == "REJECTED"
+    assert detail["decision_comment"] == "Asset tag missing"
+
+    # A rejected request frees the device for a new request
+    again = await client.post(
+        "/api/v1/wipe-requests",
+        headers=op_headers,
+        json={
+            "device_id": device_id,
+            "volume_ids": volume_ids,
+            "method": "NIST_800_88_CLEAR",
+            "reason": "Resale, asset tag attached",
+            "confirm_serial": serial,
+        },
+    )
+    assert again.status_code == 201
+    cancel = await client.post(f"/api/v1/wipe-requests/{again.json()['id']}/cancel", headers=op_headers)
+    assert cancel.status_code == 200
+    assert cancel.json()["status"] == "CANCELLED"

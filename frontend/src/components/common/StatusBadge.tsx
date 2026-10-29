@@ -3,11 +3,12 @@ import { cn, getStatusColor } from '../../lib/utils';
 
 interface StatusBadgeProps {
   status: string;
+  label?: string;
   size?: 'sm' | 'md';
   className?: string;
 }
 
-export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'sm', className }) => {
+export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, label, size = 'sm', className }) => {
   const colors = getStatusColor(status);
 
   return (
@@ -22,7 +23,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'sm', c
       )}
     >
       <span className="w-1.5 h-1.5 rounded-full bg-current mr-1.5 opacity-80" />
-      {status.replace(/_/g, ' ')}
+      {label ?? status.replace(/_/g, ' ')}
     </span>
   );
 };

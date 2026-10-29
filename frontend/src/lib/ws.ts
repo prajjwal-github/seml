@@ -2,6 +2,8 @@
  * WebSocket manager with reconnection backoff, channel subscriptions, and event bus.
  */
 
+import { wsUrl as baseWsUrl } from './config';
+
 type Listener = (data: any) => void;
 
 class WebSocketClient {
@@ -18,11 +20,9 @@ class WebSocketClient {
     }
 
     this.isConnecting = true;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
     const token = localStorage.getItem('securewipe_access_token');
     const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
-    const wsUrl = `${protocol}//${host}/ws${tokenParam}`;
+    const wsUrl = `${baseWsUrl()}${tokenParam}`;
 
     try {
       this.socket = new WebSocket(wsUrl);

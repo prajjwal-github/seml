@@ -61,8 +61,13 @@ export const CertificatesPage: React.FC = () => {
     }
   };
 
-  const handleDownloadPdf = (certId: string) => {
-    window.open(`/api/v1/certificates/${certId}/pdf`, '_blank');
+  const handleDownloadPdf = async (certId: string) => {
+    setErrorMsg(null);
+    try {
+      await api.downloadCertificatePdf(certId);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Could not download the certificate');
+    }
   };
 
   const handleDownloadJson = (cert: Certificate) => {
@@ -80,7 +85,9 @@ export const CertificatesPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-foreground">Certificates of Sanitization</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight text-foreground">
+            {user?.role === 'OPERATOR' ? 'My Certificates' : 'Certificates of Sanitization'}
+          </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
             Cryptographically signed with Ed25519, embedded QR codes, and diagonal simulation watermarks.
           </p>
@@ -112,6 +119,12 @@ export const CertificatesPage: React.FC = () => {
         </div>
         <span className="text-xs text-muted-foreground font-mono">{certs.length} certificates</span>
       </div>
+
+      {errorMsg && !revokeCert && (
+        <div className="p-3 text-xs bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 rounded-lg">
+          {errorMsg}
+        </div>
+      )}
 
       {loading ? (
         <LoadingSkeleton count={4} className="h-16" />
@@ -184,7 +197,7 @@ export const CertificatesPage: React.FC = () => {
                       >
                         JSON
                       </button>
-                      {user?.role === 'ADMIN' && !c.revoked_at && (
+                      {(user?.role === 'ADMIN' || user?.role === 'APPROVER') && !c.revoked_at && (
                         <button
                           onClick={() => setRevokeCert(c)}
                           className="px-2 py-1 rounded text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors font-semibold"

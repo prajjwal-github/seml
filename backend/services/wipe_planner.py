@@ -27,8 +27,8 @@ class WipePlan:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "method": self.method.value,
-            "nist_category": self.nist_category.value,
+            "method": getattr(self.method, "value", self.method),
+            "nist_category": getattr(self.nist_category, "value", self.nist_category),
             "method_name": self.method_name,
             "total_passes": len(self.passes),
             "passes": self.passes,
@@ -50,6 +50,12 @@ class WipePlanner:
         passes_override: Optional[int] = None,
     ) -> WipePlan:
         """Determines the appropriate simulated sanitization recipe based on media characteristics."""
+        # Callers may pass raw strings read from the database; normalise them to enums
+        method = WipeMethod(getattr(method, "value", method))
+        try:
+            media_type = MediaType(getattr(media_type, "value", media_type))
+        except ValueError:
+            media_type = MediaType.OTHER
         is_purge = method == WipeMethod.NIST_800_88_PURGE
 
         if media_type == MediaType.HDD:

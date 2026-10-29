@@ -18,6 +18,8 @@ import { CategoryIcon } from '../components/common/CategoryIcon';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { LoadingSkeleton } from '../components/common/LoadingSkeleton';
 import { AddDeviceModal } from './AddDeviceModal';
+import { useAuthStore } from '../store/authStore';
+import { certStatusLabel } from '../lib/roles';
 
 export const DevicesPage: React.FC = () => {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -28,6 +30,7 @@ export const DevicesPage: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const navigate = useNavigate();
+  const { user } = useAuthStore();
 
   const fetchDevices = async () => {
     try {
@@ -61,12 +64,15 @@ export const DevicesPage: React.FC = () => {
       {/* Header & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-foreground">IT Asset Inventory</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight text-foreground">Office Devices</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            14 hardware categories inspected via read-only agent, browser detection, and bulk CSV.
+            {user?.role === 'ADMIN'
+              ? 'Every office device registered for certified wiping. Add devices manually, by browser detection, or by CSV.'
+              : 'Open a device to see its details and request a wipe certificate.'}
           </p>
         </div>
         <div className="flex items-center space-x-3">
+          {user?.role === 'ADMIN' && (
           <button
             onClick={() => setIsAddModalOpen(true)}
             className="flex items-center space-x-2 px-3.5 py-2 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm"
@@ -74,6 +80,7 @@ export const DevicesPage: React.FC = () => {
             <Plus className="h-4 w-4" />
             <span>Add Device</span>
           </button>
+          )}
         </div>
       </div>
 
@@ -210,7 +217,7 @@ export const DevicesPage: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-5 py-3.5">
-                      <StatusBadge status={d.status} />
+                      <StatusBadge status={d.wipe_status || 'NONE'} label={certStatusLabel(d.wipe_status)} />
                     </td>
                     <td className="px-5 py-3.5 text-right">
                       <span className="text-primary font-semibold text-xs inline-flex items-center gap-1 group-hover:translate-x-1 transition-transform">
@@ -238,7 +245,7 @@ export const DevicesPage: React.FC = () => {
                   <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
                     <CategoryIcon category={d.category} className="h-5 w-5" />
                   </div>
-                  <StatusBadge status={d.status} />
+                  <StatusBadge status={d.wipe_status || 'NONE'} label={certStatusLabel(d.wipe_status)} />
                 </div>
                 <div className="mt-3">
                   <h3 className="font-bold text-sm text-foreground group-hover:text-primary transition-colors">

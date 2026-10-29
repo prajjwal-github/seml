@@ -37,7 +37,16 @@ class WipeRequestResponse(BaseModel):
     decided_at: Optional[datetime] = None
     created_at: datetime
     device_name: Optional[str] = None
+    device_serial: Optional[str] = None
+    device_category: Optional[str] = None
     requester_name: Optional[str] = None
+    # Decision and outcome details, so each dashboard can show the full lifecycle
+    approver_name: Optional[str] = None
+    decision_comment: Optional[str] = None
+    job_id: Optional[uuid.UUID] = None
+    job_status: Optional[str] = None
+    job_progress: Optional[float] = None
+    certificate_id: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -66,6 +75,7 @@ class ApprovalResponse(BaseModel):
 class ApprovalResultResponse(BaseModel):
     approval: ApprovalResponse
     raw_token: Optional[str] = None  # Single-use authorization token returned upon approval
+    job_id: Optional[uuid.UUID] = None  # Wipe job queued automatically on final approval
 
 
 class JobStartRequest(BaseModel):

@@ -38,6 +38,17 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing database tables and PL/pgSQL triggers...")
     await init_database()
 
+    # Fresh database: load the demo users and devices so the app works out of the box
+    if settings.AUTO_SEED:
+        from sqlalchemy import func, select
+        from backend.seed import seed_database
+
+        async with AsyncSessionLocal() as session:
+            user_count = (await session.execute(select(func.count(User.id)))).scalar() or 0
+        if user_count == 0:
+            logger.info("Empty database detected, seeding demo users and devices...")
+            await seed_database()
+
     # 2. Ensure active Ed25519 signing key exists
     async with AsyncSessionLocal() as session:
         active_key = await get_or_create_active_signing_key(session)

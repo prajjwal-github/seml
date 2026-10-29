@@ -61,6 +61,8 @@ class DeviceUpdate(BaseModel):
     category: Optional[DeviceCategory] = None
     manufacturer: Optional[str] = None
     model: Optional[str] = None
+    os_name: Optional[str] = None
+    os_version: Optional[str] = None
     status: Optional[DeviceStatus] = None
     specs: Optional[Dict[str, Any]] = None
 
@@ -70,6 +72,11 @@ class DeviceResponse(DeviceBase):
     created_at: datetime
     last_seen: datetime
     volumes_count: int = 0
+    # Certificate lifecycle of the device, derived from its latest wipe request:
+    # NONE, PENDING_APPROVAL, APPROVED, QUEUED, RUNNING, VERIFYING, COMPLETED, REJECTED, ...
+    wipe_status: str = "NONE"
+    latest_request_id: Optional[uuid.UUID] = None
+    certificate_id: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

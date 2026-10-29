@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     STORAGE_DIR: Path = Path(__file__).resolve().parent.parent.parent / "backend" / "storage"
     CERTS_DIR: Path = Path(__file__).resolve().parent.parent.parent / "backend" / "storage" / "certs"
 
+    # Public URL of the web app, used for the verification link / QR code on certificates
+    PUBLIC_APP_URL: str = "http://localhost:5173"
+
+    # Seed demo users and devices on startup when the database is empty (a fresh local database works out of the box)
+    AUTO_SEED: bool = True
+
+
     # CORS
     CORS_ORIGINS: Union[List[str], str] = [
         "http://localhost:5173",
@@ -68,6 +75,16 @@ class Settings(BaseSettings):
         case_sensitive=True,
         extra="ignore",
     )
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def normalise_database_url(cls, v: Any) -> Any:
+        """Accepts plain postgres:// / postgresql:// URLs as well as the asyncpg form."""
+        if isinstance(v, str):
+            for prefix in ("postgres://", "postgresql://", "postgresql+psycopg://"):
+                if v.startswith(prefix):
+                    return "postgresql+asyncpg://" + v[len(prefix):]
+        return v
 
     @field_validator("WIPE_MODE")
     @classmethod

@@ -49,6 +49,10 @@ class ConnectionManager:
                 except Exception:
                     self.disconnect(ws, "global")
 
+    async def broadcast_global(self, message: Dict[str, Any]):
+        """Broadcasts a lifecycle event (request/device/certificate change) to every client."""
+        await self.broadcast("global", message)
+
     async def broadcast_job_progress(
         self,
         job_id: str,

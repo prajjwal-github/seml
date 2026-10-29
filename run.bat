@@ -47,5 +47,4 @@ echo Persona Logins:
 echo   Operator: operator@securewipe.local / Operator123!
 echo   Approver: approver@securewipe.local / Approver123!
 echo   Admin:    admin@securewipe.local    / Admin123!
-echo   Auditor:  auditor@securewipe.local  / Auditor123!
 echo =========================================================================

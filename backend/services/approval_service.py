@@ -49,6 +49,15 @@ class ApprovalService:
         return RiskLevel.LOW, 1
 
     @classmethod
+    def required_approvers(cls, request: WipeRequest) -> int:
+        """Number of approvals needed before the wipe can run.
+
+        The Approver role is the certifying authority, so a single Approver decision
+        is final. Risk level is still evaluated and shown to the Approver for context.
+        """
+        return 1
+
+    @classmethod
     async def create_approval(
         cls,
         session: AsyncSession,
@@ -77,8 +86,7 @@ class ApprovalService:
             if prev.approver_id == approver.id:
                 raise ValueError("You have already submitted an approval decision for this request.")
 
-        req_risk = request.risk_level.value if hasattr(request.risk_level, "value") else str(request.risk_level)
-        required_approvers = 2 if req_risk in (RiskLevel.HIGH.value, RiskLevel.CRITICAL.value, "HIGH", "CRITICAL") else 1
+        required_approvers = cls.required_approvers(request)
         approved_count = sum(
             1 for a in existing_approvals 
             if (a.decision.value if hasattr(a.decision, "value") else str(a.decision)) in (ApprovalDecision.APPROVED.value, "APPROVED")
@@ -141,9 +149,7 @@ class ApprovalService:
             existing_approvals = res.scalars().all()
             total_approvals = len(existing_approvals) + 1  # including this one
 
-            req_risk = request.risk_level.value if hasattr(request.risk_level, "value") else str(request.risk_level)
-            required_approvers = 2 if req_risk in (RiskLevel.HIGH.value, RiskLevel.CRITICAL.value, "HIGH", "CRITICAL") else 1
-            if total_approvals >= required_approvers:
+            if total_approvals >= cls.required_approvers(request):
                 request.status = RequestStatus.APPROVED
                 request.decided_at = now
 
