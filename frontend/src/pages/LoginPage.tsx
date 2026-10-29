@@ -4,6 +4,7 @@ import { ShieldCheck, Lock, Mail, ArrowRight, UserCheck, CheckCircle2 } from 'lu
 import { useAuthStore } from '../store/authStore';
 import { UserRole } from '../types';
 import { SimulationBanner } from '../components/common/SimulationBanner';
+import { ROLES } from '../lib/roles';
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -41,33 +42,6 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const demoAccounts: { role: UserRole; title: string; desc: string; email: string }[] = [
-    {
-      role: 'OPERATOR',
-      title: 'Operator Persona',
-      desc: 'Submits device wipe requests and starts authorized jobs.',
-      email: 'operator@securewipe.local',
-    },
-    {
-      role: 'APPROVER',
-      title: 'Approver Persona',
-      desc: 'Reviews requests, enforces four-eyes dual-custody approval.',
-      email: 'approver@securewipe.local',
-    },
-    {
-      role: 'ADMIN',
-      title: 'Admin Persona',
-      desc: 'Full administrative access, user management, and revocations.',
-      email: 'admin@securewipe.local',
-    },
-    {
-      role: 'AUDITOR',
-      title: 'Auditor Persona',
-      desc: 'Inspects immutable append-only hash chains and certificates.',
-      email: 'auditor@securewipe.local',
-    },
-  ];
-
   return (
     <div className="min-h-screen bg-background flex flex-col justify-between">
       <SimulationBanner />
@@ -78,11 +52,11 @@ export const LoginPage: React.FC = () => {
         </div>
         <h2 className="text-2xl font-extrabold tracking-tight text-foreground">SecureWipe Platform</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          NIST SP 800-88 Rev. 1 Certified Sanitization & Dual-Custody Approval
+          Certified data wiping for office devices: Admin registers, Operator requests, Approver certifies
         </p>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-xl px-4">
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-2xl px-4">
         <div className="bg-card border border-border py-8 px-6 shadow-xl rounded-2xl sm:px-10">
           <form className="space-y-4" onSubmit={handleSubmit}>
             {errorMsg && (
@@ -140,13 +114,13 @@ export const LoginPage: React.FC = () => {
             <div className="flex items-center justify-between mb-3">
               <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                 <UserCheck className="h-3.5 w-3.5 text-primary" />
-                Quick 1-Click Demo Logins
+                Sign in as one of the three roles
               </span>
-              <span className="text-[10px] text-muted-foreground font-mono">Instant Persona Switch</span>
+              <span className="text-[10px] text-muted-foreground font-mono">Demo accounts</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {demoAccounts.map((item) => (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {ROLES.map((item) => (
                 <button
                   key={item.role}
                   onClick={() => handleQuick(item.role)}
@@ -155,13 +129,12 @@ export const LoginPage: React.FC = () => {
                 >
                   <div className="flex items-center justify-between w-full">
                     <span className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">
-                      {item.role}
+                      {item.title}
                     </span>
                     <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary" />
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
-                    {item.desc}
-                  </p>
+                  <span className="text-[10px] font-semibold text-primary/80 mt-0.5">{item.subtitle}</span>
+                  <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">{item.description}</p>
                   <div className="mt-2 text-[10px] font-mono text-muted-foreground/80">{item.email}</div>
                 </button>
               ))}

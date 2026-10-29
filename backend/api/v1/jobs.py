@@ -36,7 +36,7 @@ router = APIRouter(prefix="/jobs", tags=["Wipe Jobs"])
 @router.post("/start", response_model=WipeJobResponse, status_code=status.HTTP_201_CREATED)
 async def start_wipe_job(
     req: JobStartRequest,
-    current_user: User = Depends(require_roles([UserRole.OPERATOR, UserRole.ADMIN])),
+    current_user: User = Depends(require_roles([UserRole.OPERATOR])),
     session: AsyncSession = Depends(get_db),
 ):
     """Starts a wipe job by validating the single-use token and matching approval.
@@ -119,6 +119,10 @@ async def list_jobs(
 ):
     """Lists all wipe jobs and their execution states."""
     stmt = select(WipeJob).order_by(WipeJob.created_at.desc())
+    if current_user.role == UserRole.OPERATOR:
+        stmt = stmt.join(WipeRequest, WipeRequest.id == WipeJob.request_id).where(
+            WipeRequest.requested_by == current_user.id
+        )
     if status_filter:
         stmt = stmt.where(WipeJob.status == status_filter)
 

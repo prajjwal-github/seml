@@ -17,8 +17,9 @@ export async function apiRequest<T = any>(
 ): Promise<T> {
   const token = localStorage.getItem('securewipe_access_token');
 
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers as Record<string, string>),
   };
 
@@ -67,9 +68,16 @@ export async function apiRequest<T = any>(
     };
     try {
       const parsed = await res.json();
+      let message = parsed.message || parsed.detail || errData.message;
+      if (Array.isArray(message)) {
+        // FastAPI validation errors: [{loc, msg}, ...]
+        message = message
+          .map((e: any) => `${(e.loc || []).filter((p: any) => p !== 'body').join('.')}: ${e.msg}`)
+          .join('; ');
+      }
       errData = {
         code: parsed.code || res.status,
-        message: parsed.message || parsed.detail || errData.message,
+        message: String(message),
         details: parsed.details,
       };
     } catch {
@@ -100,8 +108,14 @@ export const api = {
   },
   getDevice: (id: string) => apiRequest(`/devices/${id}`),
   createDevice: (data: any) => apiRequest('/devices', { method: 'POST', body: JSON.stringify(data) }),
-  importDevicesCsv: (csvContent: string) =>
-    apiRequest('/devices/import-csv', { method: 'POST', body: JSON.stringify({ csv_content: csvContent }) }),
+  updateDevice: (id: string, data: any) =>
+    apiRequest(`/devices/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteDevice: (id: string) => apiRequest(`/devices/${id}`, { method: 'DELETE' }),
+  importDevicesCsv: (csvContent: string) => {
+    const form = new FormData();
+    form.append('file', new Blob([csvContent], { type: 'text/csv' }), 'devices.csv');
+    return apiRequest('/devices/import-csv', { method: 'POST', body: form });
+  },
 
   // Wipe Requests
   createWipeRequest: (data: {
@@ -148,6 +162,36 @@ export const api = {
     return apiRequest(`/certificates${query}`);
   },
   getCertificate: (id: string) => apiRequest(`/certificates/${id}`),
+  downloadCertificatePdf: async (certificateId: string) => {
+    // The PDF endpoint needs the bearer token, so fetch it as a blob rather than opening a raw URL
+    const send = () =>
+      fetch(`${BASE_URL}/certificates/${encodeURIComponent(certificateId)}/pdf`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('securewipe_access_token') ?? ''}` },
+      });
+    let res = await send();
+    if (res.status === 401) {
+      await apiRequest('/auth/me').catch(() => undefined); // triggers a token refresh
+      res = await send();
+    }
+    if (!res.ok) {
+      let message = `Download failed (${res.status})`;
+      try {
+        message = (await res.json()).message || message;
+      } catch {
+        // not JSON
+      }
+      throw { code: res.status, message } as ApiError;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${certificateId}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
   revokeCertificate: (id: string, reason: string) =>
     apiRequest(`/certificates/${id}/revoke`, {
       method: 'POST',

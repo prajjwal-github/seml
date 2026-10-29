@@ -48,4 +48,3 @@ Write-Host "`nPre-seeded Demo Personas:" -ForegroundColor Yellow
 Write-Host "  Operator: operator@securewipe.local / Operator123!" -ForegroundColor Gray
 Write-Host "  Approver: approver@securewipe.local / Approver123!" -ForegroundColor Gray
 Write-Host "  Admin:    admin@securewipe.local    / Admin123!" -ForegroundColor Gray
-Write-Host "  Auditor:  auditor@securewipe.local  / Auditor123!" -ForegroundColor Gray

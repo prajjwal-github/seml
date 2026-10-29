@@ -31,6 +31,7 @@ class AuditChainVerifyResponse(BaseModel):
 
 class ReportSummaryResponse(BaseModel):
     total_wiped: int
+    total_devices: int = 0
     wiping_now: int
     pending_approvals: int
     certificates_count: int

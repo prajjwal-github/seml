@@ -207,10 +207,9 @@ export const AdminSettingsPage: React.FC = () => {
                   onChange={(e) => setNewUser({ ...newUser, role: e.target.value as UserRole })}
                   className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs"
                 >
-                  <option value="OPERATOR">OPERATOR (Requests Sanitization)</option>
-                  <option value="APPROVER">APPROVER (Dual-Custody Authorization)</option>
-                  <option value="ADMIN">ADMIN (Full Access & Revocations)</option>
-                  <option value="AUDITOR">AUDITOR (Read-Only Compliance)</option>
+                  <option value="OPERATOR">Operator (requests certificates)</option>
+                  <option value="APPROVER">Approver (approves / rejects)</option>
+                  <option value="ADMIN">Admin (manages devices)</option>
                 </select>
               </div>
 

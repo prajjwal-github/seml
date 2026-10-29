@@ -18,7 +18,6 @@ const DEMO_CREDENTIALS: Record<UserRole, { email: string; pass: string }> = {
   OPERATOR: { email: 'operator@securewipe.local', pass: 'Operator123!' },
   APPROVER: { email: 'approver@securewipe.local', pass: 'Approver123!' },
   ADMIN: { email: 'admin@securewipe.local', pass: 'Admin123!' },
-  AUDITOR: { email: 'auditor@securewipe.local', pass: 'Auditor123!' },
 };
 
 export const useAuthStore = create<AuthState>((set, get) => ({

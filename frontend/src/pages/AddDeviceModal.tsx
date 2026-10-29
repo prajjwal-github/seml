@@ -47,14 +47,14 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({ isOpen, onClose,
     category: 'LAPTOP' as DeviceCategory,
     os_name: 'Windows 11 Pro',
     storage_size_gb: 512,
-    storage_type: 'NVMe SSD',
+    storage_type: 'NVME_SSD',
   });
 
   // CSV content
   const [csvContent, setCsvContent] = useState(
     `category,manufacturer,model,serial_number,os_name,storage_media_type,storage_size_gb
-LAPTOP,Dell,Latitude 5430,DELL-LAT-8849,Windows 11,NVMe,512
-SERVER,Supermicro,SYS-2029U,SM-2029-4412,Ubuntu Server,SATA SSD,1920
+LAPTOP,Dell,Latitude 5430,DELL-LAT-8849,Windows 11,NVME_SSD,512
+SERVER,Supermicro,SYS-2029U,SM-2029-4412,Ubuntu Server,SATA_SSD,1920
 PHONE,Google,Pixel 7a,GOOG-PX7A-3991,Android 14,UFS,128`
   );
 
@@ -159,10 +159,10 @@ PHONE,Google,Pixel 7a,GOOG-PX7A-3991,Android 14,UFS,128`
         volumes: [
           {
             name: 'Primary Volume (Simulated)',
-            media_type: 'NVMe',
+            media_type: 'NVME_SSD',
             size_bytes: 256 * 1024 * 1024 * 1024,
             is_system: true,
-            is_removable: false,
+            removable: false,
           },
         ],
       };
@@ -198,7 +198,7 @@ PHONE,Google,Pixel 7a,GOOG-PX7A-3991,Android 14,UFS,128`
             media_type: manualForm.storage_type,
             size_bytes: manualForm.storage_size_gb * 1024 * 1024 * 1024,
             is_system: true,
-            is_removable: false,
+            removable: false,
           },
         ],
       };
@@ -220,7 +220,7 @@ PHONE,Google,Pixel 7a,GOOG-PX7A-3991,Android 14,UFS,128`
     setErrorMsg(null);
     try {
       const res = await api.importDevicesCsv(csvContent);
-      setSuccessMsg(`Successfully imported ${res.imported_count || 'all'} devices!`);
+      setSuccessMsg(`Successfully imported ${Array.isArray(res) ? res.length : 'all'} devices!`);
       setTimeout(() => {
         onCreated();
         onClose();
@@ -438,11 +438,13 @@ PHONE,Google,Pixel 7a,GOOG-PX7A-3991,Android 14,UFS,128`
                     onChange={(e) => setManualForm({ ...manualForm, storage_type: e.target.value })}
                     className="w-full px-3 py-2 bg-background border border-border rounded-lg text-xs"
                   >
-                    <option value="NVMe SSD">NVMe SSD</option>
-                    <option value="SATA SSD">SATA SSD</option>
+                    <option value="NVME_SSD">NVMe SSD</option>
+                    <option value="SATA_SSD">SATA SSD</option>
                     <option value="HDD">HDD (Mechanical)</option>
-                    <option value="eMMC / UFS">eMMC / UFS</option>
-                    <option value="USB Flash">USB Flash</option>
+                    <option value="EMMC">eMMC</option>
+                    <option value="UFS">UFS (phones / tablets)</option>
+                    <option value="USB_FLASH">USB Flash</option>
+                    <option value="SD_CARD">SD Card</option>
                   </select>
                 </div>
                 <div>

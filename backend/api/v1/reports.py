@@ -37,6 +37,8 @@ async def get_reports_summary(
     pending_stmt = select(func.count(WipeRequest.id)).where(WipeRequest.status == RequestStatus.PENDING_APPROVAL)
     pending_approvals = (await session.execute(pending_stmt)).scalar() or 0
 
+    total_devices = (await session.execute(select(func.count(Device.id)))).scalar() or 0
+
     cert_stmt = select(func.count(Certificate.id))
     certs_count = (await session.execute(cert_stmt)).scalar() or 0
 
@@ -89,6 +91,7 @@ async def get_reports_summary(
 
     return ReportSummaryResponse(
         total_wiped=total_wiped,
+        total_devices=total_devices,
         wiping_now=wiping_now,
         pending_approvals=pending_approvals,
         certificates_count=certs_count,

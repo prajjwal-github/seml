@@ -142,7 +142,7 @@ def generate_pdf_certificate(
         ("Volumes Sanitized:", f"{len(payload.get('volumes', []))} volume(s) processed"),
         ("Verification Coverage:", f"{verif.get('sample_percentage', 10.0)}% sample verified ({verif.get('hash_verification', 'ZERO_PATTERN_CONFIRMED')})"),
         ("Hidden Areas Sanitized:", f"HPA Cleared: {hidden.get('hpa_cleared', True)} | DCO Cleared: {hidden.get('dco_cleared', True)} | Remapped Sectors: Checked"),
-        ("Dual-Custody Approvals:", f"Operator: {payload.get('operator', {}).get('name', 'Operator')} | Approver: {payload.get('approver', {}).get('name', 'Approver')}"),
+        ("Requested / Approved by:", f"Operator: {payload.get('operator', {}).get('name', 'Operator')} | Approver: {payload.get('approver', {}).get('name', 'Approver')}"),
     ]
 
     for label, val in sanitize_fields:
@@ -375,3 +375,10 @@ async def verify_certificate_payload(
         return "TAMPERED", "Ed25519 digital signature verification failed."
 
     return "VALID", "Certificate is cryptographically valid and authentic."
+
+
+def regenerate_pdf(cert: Certificate) -> str:
+    """Re-renders a certificate PDF from its stored signed payload and returns the new path."""
+    pdf_path = settings.CERTS_DIR / f"{cert.certificate_id}.pdf"
+    generate_pdf_certificate(cert.certificate_id, dict(cert.payload), cert.signature, pdf_path)
+    return str(pdf_path)

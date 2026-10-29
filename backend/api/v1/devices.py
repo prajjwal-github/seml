@@ -6,13 +6,14 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete as sa_delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend.api.deps import get_current_user, get_db, require_roles
 from backend.core.audit import log_audit_event
 from backend.models import (
+    Certificate,
     Device,
     DeviceCategory,
     DeviceStatus,
@@ -21,7 +22,10 @@ from backend.models import (
     StorageVolume,
     User,
     UserRole,
+    WipeJob,
+    WipeRequest,
 )
+from backend.ws.manager import ws_manager
 from backend.schemas.device import (
     DeviceCreate,
     DeviceDetailResponse,
@@ -32,6 +36,38 @@ from backend.schemas.device import (
 )
 
 router = APIRouter(prefix="/devices", tags=["Devices"])
+
+
+async def _attach_wipe_state(session: AsyncSession, responses: List[DeviceResponse]) -> None:
+    """Fills each device's certificate lifecycle from its most recent wipe request."""
+    if not responses:
+        return
+    ids = [r.id for r in responses]
+    reqs = (
+        await session.execute(
+            select(WipeRequest).where(WipeRequest.device_id.in_(ids)).order_by(WipeRequest.created_at.asc())
+        )
+    ).scalars().all()
+    latest = {}
+    for r in reqs:
+        latest[r.device_id] = r
+
+    req_ids = [r.id for r in latest.values()]
+    cert_by_req = {}
+    if req_ids:
+        rows = await session.execute(
+            select(WipeJob.request_id, Certificate.certificate_id)
+            .join(Certificate, Certificate.job_id == WipeJob.id)
+            .where(WipeJob.request_id.in_(req_ids))
+        )
+        cert_by_req = {row[0]: row[1] for row in rows.all()}
+
+    for resp in responses:
+        r = latest.get(resp.id)
+        if r:
+            resp.wipe_status = r.status.value if hasattr(r.status, "value") else str(r.status)
+            resp.latest_request_id = r.id
+            resp.certificate_id = cert_by_req.get(r.id)
 
 
 @router.get("", response_model=List[DeviceResponse])
@@ -68,15 +104,14 @@ async def list_devices(
     res = await session.execute(stmt)
     devices = res.scalars().all()
 
-    # Populate volume counts
+    # Populate volume counts (volumes are eagerly loaded) and certificate lifecycle
     responses = []
     for d in devices:
-        count_stmt = select(func.count(StorageVolume.id)).where(StorageVolume.device_id == d.id)
-        cnt = (await session.execute(count_stmt)).scalar() or 0
         resp = DeviceResponse.model_validate(d)
-        resp.volumes_count = cnt
+        resp.volumes_count = len(d.volumes)
         responses.append(resp)
 
+    await _attach_wipe_state(session, responses)
     return responses
 
 
@@ -128,15 +163,30 @@ async def get_device_stats(
 @router.post("", response_model=DeviceDetailResponse, status_code=status.HTTP_201_CREATED)
 async def create_device(
     req: DeviceCreate,
-    current_user: User = Depends(require_roles([UserRole.OPERATOR, UserRole.ADMIN])),
+    current_user: User = Depends(require_roles([UserRole.ADMIN])),
     session: AsyncSession = Depends(get_db),
 ):
-    """Registers a new IT asset device along with its initial storage volume inventory."""
+    """Admin registers a new office device along with its storage volume inventory."""
+    serial = req.serial_number.strip()
+    if not serial:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Serial number is required")
+    dup = (await session.execute(select(Device).where(func.lower(Device.serial_number) == serial.lower()))).scalars().first()
+    if dup:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A device with serial number '{serial}' is already registered.",
+        )
+    if not req.volumes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Add at least one storage volume so the device can be sanitized.",
+        )
+
     device = Device(
         category=req.category,
         manufacturer=req.manufacturer,
         model=req.model,
-        serial_number=req.serial_number.strip(),
+        serial_number=serial,
         system_uuid=req.system_uuid,
         os_name=req.os_name,
         os_version=req.os_version,
@@ -181,7 +231,10 @@ async def create_device(
         details={"category": device.category.value, "model": device.model},
     )
     await session.commit()
-    await session.refresh(device)
+    device = (
+        await session.execute(select(Device).where(Device.id == device.id).options(selectinload(Device.volumes)))
+    ).scalar_one()
+    await ws_manager.broadcast_global({"type": "device.updated", "device_id": str(device.id)})
     return DeviceDetailResponse.model_validate(device)
 
 
@@ -204,7 +257,7 @@ async def get_device(
 @router.post("/import-csv", response_model=List[DeviceResponse])
 async def import_devices_csv(
     file: UploadFile = File(...),
-    current_user: User = Depends(require_roles([UserRole.OPERATOR, UserRole.ADMIN])),
+    current_user: User = Depends(require_roles([UserRole.ADMIN])),
     session: AsyncSession = Depends(get_db),
 ):
     """Bulk imports devices and default volumes from a CSV file."""
@@ -213,7 +266,12 @@ async def import_devices_csv(
 
     created_devices = []
     for row in reader:
-        serial = row.get("serial_number", "").strip() or f"SN-IMP-{uuid.uuid4().hex[:8]}"
+        serial = (row.get("serial_number") or "").strip() or f"SN-IMP-{uuid.uuid4().hex[:8]}"
+        exists = (
+            await session.execute(select(Device.id).where(func.lower(Device.serial_number) == serial.lower()))
+        ).first()
+        if exists:
+            continue
         category_str = row.get("category", "DESKTOP").upper()
         try:
             category = DeviceCategory[category_str]
@@ -237,14 +295,24 @@ async def import_devices_csv(
         await session.flush()
 
         # Add primary volume
-        vol_size = int(row.get("size_gb", 256)) * 1024 * 1024 * 1024
+        try:
+            size_gb = row.get("storage_size_gb") or row.get("size_gb") or 256
+            vol_size = int(float(size_gb)) * 1024 * 1024 * 1024
+        except ValueError:
+            vol_size = 256 * 1024 * 1024 * 1024
+        media_str = (row.get("storage_media_type") or row.get("media_type") or "SATA_SSD").strip().upper().replace(" ", "_")
+        media_str = {"NVME": "NVME_SSD", "SSD": "SATA_SSD", "USB": "USB_FLASH", "SD": "SD_CARD"}.get(media_str, media_str)
+        try:
+            media = MediaType[media_str]
+        except KeyError:
+            media = MediaType.OTHER
         vol = StorageVolume(
             device_id=dev.id,
             name="Primary Storage",
             mount_point="/",
             size_bytes=vol_size,
-            media_type=MediaType.SATA_SSD,
-            bus_type="SATA",
+            media_type=media,
+            bus_type="NVMe" if media == MediaType.NVME_SSD else "SATA",
             is_boot=True,
             is_system=True,
         )
@@ -260,4 +328,70 @@ async def import_devices_csv(
         details={"count": len(created_devices)},
     )
     await session.commit()
+    await ws_manager.broadcast_global({"type": "device.updated", "device_id": "BULK"})
     return [DeviceResponse.model_validate(d) for d in created_devices]
+
+
+@router.patch("/{device_id}", response_model=DeviceDetailResponse)
+async def update_device(
+    device_id: uuid.UUID,
+    req: DeviceUpdate,
+    current_user: User = Depends(require_roles([UserRole.ADMIN])),
+    session: AsyncSession = Depends(get_db),
+):
+    """Admin edits a registered device's descriptive details."""
+    device = (
+        await session.execute(select(Device).where(Device.id == device_id).options(selectinload(Device.volumes)))
+    ).scalar_one_or_none()
+    if not device:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
+
+    changes = req.model_dump(exclude_none=True)
+    for field, value in changes.items():
+        setattr(device, field, value)
+
+    await log_audit_event(
+        session=session,
+        action="DEVICE_UPDATED",
+        entity_type="DEVICE",
+        entity_id=str(device.id),
+        actor_id=current_user.id,
+        details={"updated_fields": list(changes.keys())},
+    )
+    await session.commit()
+    await session.refresh(device)
+    await ws_manager.broadcast_global({"type": "device.updated", "device_id": str(device.id)})
+    return DeviceDetailResponse.model_validate(device)
+
+
+@router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_device(
+    device_id: uuid.UUID,
+    current_user: User = Depends(require_roles([UserRole.ADMIN])),
+    session: AsyncSession = Depends(get_db),
+):
+    """Admin removes a device that has never had a certificate request."""
+    device = await session.get(Device, device_id)
+    if not device:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
+
+    has_requests = (
+        await session.execute(select(WipeRequest.id).where(WipeRequest.device_id == device_id).limit(1))
+    ).first()
+    if has_requests:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This device has certificate history and cannot be removed.",
+        )
+
+    await log_audit_event(
+        session=session,
+        action="DEVICE_DELETED",
+        entity_type="DEVICE",
+        entity_id=str(device.id),
+        actor_id=current_user.id,
+        details={"serial_number": device.serial_number, "model": device.model},
+    )
+    await session.execute(sa_delete(Device).where(Device.id == device_id))
+    await session.commit()
+    await ws_manager.broadcast_global({"type": "device.updated", "device_id": str(device_id)})

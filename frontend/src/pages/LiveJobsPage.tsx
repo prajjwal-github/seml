@@ -20,23 +20,15 @@ import { formatDate } from '../lib/utils';
 
 export const LiveJobsPage: React.FC = () => {
   const [jobs, setJobs] = useState<WipeJob[]>([]);
-  const [approvedRequests, setApprovedRequests] = useState<WipeRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<WipeJob | null>(null);
   const [jobEvents, setJobEvents] = useState<any[]>([]);
-  const [startingToken, setStartingToken] = useState('');
-  const [startReqId, setStartReqId] = useState('');
-  const [starting, setStarting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const fetchJobsAndApproved = async () => {
     try {
-      const [allJobs, allReqs] = await Promise.all([
-        api.getJobs(),
-        api.getWipeRequests({ status: 'APPROVED' }),
-      ]);
+      const allJobs = await api.getJobs();
       setJobs(allJobs);
-      setApprovedRequests(allReqs);
       if (!selectedJob && allJobs.length > 0) {
         setSelectedJob(allJobs[0]);
       }
@@ -55,16 +47,19 @@ export const LiveJobsPage: React.FC = () => {
       setJobs((prev) =>
         prev.map((j) =>
           j.id === msg.job_id
-            ? { ...j, progress: msg.progress, current_pass: msg.current_pass, total_passes: msg.total_passes }
+            ? { ...j, status: msg.status ?? j.status, progress: msg.progress, current_pass: msg.current_pass, total_passes: msg.total_passes }
             : j
         )
       );
+      if (['COMPLETED', 'FAILED', 'CANCELLED', 'QUEUED'].includes(msg.status)) {
+        fetchJobsAndApproved();
+      }
       if (selectedJob && selectedJob.id === msg.job_id) {
         setJobEvents((prev) => [
           {
             id: Math.random().toString(),
             timestamp: new Date().toLocaleTimeString(),
-            message: `Pass ${msg.current_pass}/${msg.total_passes}: ${msg.progress}% complete (${msg.details?.volume_name || 'volume'})`,
+            message: `Pass ${msg.current_pass}/${msg.total_passes} · ${msg.progress}% · ${msg.message || ''}`,
           },
           ...prev.slice(0, 49),
         ]);
@@ -110,27 +105,6 @@ export const LiveJobsPage: React.FC = () => {
     }
   };
 
-  const handleStartJob = async (reqId: string, token: string) => {
-    if (!token.trim()) {
-      setErrorMsg('Approval authorization token is required.');
-      return;
-    }
-
-    setStarting(true);
-    setErrorMsg(null);
-    try {
-      const job = await api.startJob(reqId, token.trim());
-      setStartingToken('');
-      setStartReqId('');
-      await fetchJobsAndApproved();
-      setSelectedJob(job);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to start job');
-    } finally {
-      setStarting(false);
-    }
-  };
-
   const handleCancel = async (jobId: string) => {
     try {
       await api.cancelJob(jobId);
@@ -145,9 +119,9 @@ export const LiveJobsPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-foreground">Live Sanitization Operations</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight text-foreground">Wipe Progress</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Real-time streaming telemetry, multi-pass overwrite progress, and cryptographic verification.
+            Approved requests start wiping automatically. Follow each pass live until the signed certificate is issued.
           </p>
         </div>
         <div className="flex items-center space-x-2">
@@ -163,61 +137,6 @@ export const LiveJobsPage: React.FC = () => {
           <button onClick={() => setErrorMsg(null)} className="text-rose-600 font-bold ml-2">
             &times;
           </button>
-        </div>
-      )}
-
-      {/* Approved Requests Awaiting Start */}
-      {approvedRequests.length > 0 && (
-        <div className="bg-card border border-emerald-500/30 rounded-xl p-5 shadow-sm space-y-3">
-          <div className="flex items-center space-x-2">
-            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-            <h2 className="text-sm font-bold text-foreground">
-              Approved Requests Awaiting Operator Start ({approvedRequests.length})
-            </h2>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            These requests have cleared dual-custody review. Operators can initialize execution using the single-use token.
-          </p>
-
-          <div className="space-y-2 mt-2">
-            {approvedRequests.map((req) => {
-              const savedToken = localStorage.getItem(`securewipe_token_${req.id}`) || '';
-              const tokenToUse = startReqId === req.id ? startingToken : savedToken;
-              return (
-                <div
-                  key={req.id}
-                  className="p-3 rounded-lg bg-muted/40 border border-border flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs"
-                >
-                  <div>
-                    <div className="font-bold text-foreground">{req.device_name || 'Device'}</div>
-                    <div className="text-[11px] text-muted-foreground font-mono">
-                      Method: {req.method} | Risk: {req.risk_level}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="text"
-                      placeholder="Paste single-use token..."
-                      value={tokenToUse}
-                      onChange={(e) => {
-                        setStartReqId(req.id);
-                        setStartingToken(e.target.value);
-                      }}
-                      className="px-3 py-1.5 bg-background border border-border rounded-lg text-xs font-mono w-48"
-                    />
-                    <button
-                      onClick={() => handleStartJob(req.id, tokenToUse)}
-                      disabled={starting || !tokenToUse}
-                      className="px-3.5 py-1.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-40 transition-colors shrink-0"
-                    >
-                      Start Wipe Job
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
         </div>
       )}
 
@@ -248,7 +167,7 @@ export const LiveJobsPage: React.FC = () => {
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-xs text-foreground truncate max-w-[150px]">
-                      {j.device_model || 'Target Asset'}
+                      {j.device_name || j.device_model || 'Device'}
                     </span>
                     <StatusBadge status={j.status} />
                   </div>
@@ -288,7 +207,7 @@ export const LiveJobsPage: React.FC = () => {
                   <div>
                     <div className="flex items-center space-x-2">
                       <h2 className="text-base font-bold text-foreground">
-                        {selectedJob.device_model || 'Target Asset'}
+                        {selectedJob.device_name || selectedJob.device_model || 'Device'}
                       </h2>
                       <StatusBadge status={selectedJob.status} />
                     </div>

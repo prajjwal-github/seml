@@ -23,7 +23,17 @@ from backend.models import (
 )
 from backend.schemas.wipe import WipeRequestCreate, WipeRequestResponse
 from backend.services.approval_service import ApprovalService
+from backend.services.request_view import build_request_view, build_request_views
 from backend.ws.manager import ws_manager
+
+# Statuses that mean a device already has a certificate request in flight
+ACTIVE_REQUEST_STATUSES = (
+    RequestStatus.PENDING_APPROVAL,
+    RequestStatus.APPROVED,
+    RequestStatus.QUEUED,
+    RequestStatus.RUNNING,
+    RequestStatus.VERIFYING,
+)
 
 router = APIRouter(prefix="/wipe-requests", tags=["Wipe Requests"])
 
@@ -31,10 +41,10 @@ router = APIRouter(prefix="/wipe-requests", tags=["Wipe Requests"])
 @router.post("", response_model=WipeRequestResponse, status_code=status.HTTP_201_CREATED)
 async def create_wipe_request(
     req: WipeRequestCreate,
-    current_user: User = Depends(require_roles([UserRole.OPERATOR, UserRole.ADMIN])),
+    current_user: User = Depends(require_roles([UserRole.OPERATOR])),
     session: AsyncSession = Depends(get_db),
 ):
-    """Submits a new wipe request requiring dual-custody approval.
+    """Operator submits a wipe-certificate request; it waits for an Approver's decision.
 
     NO job is created and nothing runs at this stage. UI shows 'Waiting for approval'.
     """
@@ -49,8 +59,21 @@ async def create_wipe_request(
             detail=f"Typed serial number '{req.confirm_serial}' does not match device serial number '{device.serial_number}'",
         )
 
-    # Fetch volumes
-    v_stmt = select(StorageVolume).where(StorageVolume.id.in_(req.volume_ids))
+    # One open request per device at a time
+    open_stmt = select(WipeRequest).where(
+        WipeRequest.device_id == device.id,
+        WipeRequest.status.in_(ACTIVE_REQUEST_STATUSES),
+    )
+    if (await session.execute(open_stmt)).scalars().first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This device already has a certificate request in progress.",
+        )
+
+    # Fetch volumes (only those that belong to this device)
+    v_stmt = select(StorageVolume).where(
+        StorageVolume.id.in_(req.volume_ids), StorageVolume.device_id == device.id
+    )
     vols = (await session.execute(v_stmt)).scalars().all()
     if not vols:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="At least one valid volume must be selected")
@@ -96,8 +119,8 @@ async def create_wipe_request(
         },
     )
 
-    # Notify all approvers & admins
-    approvers_stmt = select(User).where(User.role.in_([UserRole.APPROVER, UserRole.ADMIN]))
+    # Notify all approvers
+    approvers_stmt = select(User).where(User.role == UserRole.APPROVER)
     approvers = (await session.execute(approvers_stmt)).scalars().all()
 
     method_str = req.method.value if hasattr(req.method, "value") else str(req.method)
@@ -105,7 +128,7 @@ async def create_wipe_request(
         if approver.id != current_user.id:
             notif = Notification(
                 user_id=approver.id,
-                title="Wipe Approval Required",
+                title="Certificate Approval Required",
                 message=f"Operator {current_user.name} requested {method_str} on {device.manufacturer} {device.model}",
                 link="/approvals",
             )
@@ -122,10 +145,7 @@ async def create_wipe_request(
         risk_level=risk_level.value,
     )
 
-    resp = WipeRequestResponse.model_validate(wipe_req)
-    resp.device_name = f"{device.manufacturer} {device.model}"
-    resp.requester_name = current_user.name
-    return resp
+    return await build_request_view(session, wipe_req)
 
 
 @router.get("", response_model=List[WipeRequestResponse])
@@ -135,8 +155,10 @@ async def list_wipe_requests(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ):
-    """Lists wipe requests with status and device filters."""
+    """Lists wipe requests. Operators only see the requests they submitted."""
     stmt = select(WipeRequest).order_by(WipeRequest.created_at.desc())
+    if current_user.role == UserRole.OPERATOR:
+        stmt = stmt.where(WipeRequest.requested_by == current_user.id)
 
     if status_filter:
         stmt = stmt.where(WipeRequest.status == status_filter)
@@ -144,20 +166,7 @@ async def list_wipe_requests(
         stmt = stmt.where(WipeRequest.device_id == device_id)
 
     res = await session.execute(stmt)
-    requests = res.scalars().all()
-
-    responses = []
-    for r in requests:
-        dev = await session.get(Device, r.device_id)
-        req_user = await session.get(User, r.requested_by)
-        resp = WipeRequestResponse.model_validate(r)
-        if dev:
-            resp.device_name = f"{dev.manufacturer} {dev.model}"
-        if req_user:
-            resp.requester_name = req_user.name
-        responses.append(resp)
-
-    return responses
+    return await build_request_views(session, res.scalars().all())
 
 
 @router.get("/{request_id}", response_model=WipeRequestResponse)
@@ -168,17 +177,9 @@ async def get_wipe_request(
 ):
     """Retrieves single wipe request record."""
     r = await session.get(WipeRequest, request_id)
-    if not r:
+    if not r or (current_user.role == UserRole.OPERATOR and r.requested_by != current_user.id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wipe request not found")
-
-    dev = await session.get(Device, r.device_id)
-    req_user = await session.get(User, r.requested_by)
-    resp = WipeRequestResponse.model_validate(r)
-    if dev:
-        resp.device_name = f"{dev.manufacturer} {dev.model}"
-    if req_user:
-        resp.requester_name = req_user.name
-    return resp
+    return await build_request_view(session, r)
 
 
 @router.post("/{request_id}/cancel", response_model=WipeRequestResponse)
@@ -187,15 +188,21 @@ async def cancel_wipe_request(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ):
-    """Cancels a wipe request before execution has started."""
+    """Withdraws a request that is still waiting for approval (requester or Admin only)."""
     r = await session.get(WipeRequest, request_id)
     if not r:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wipe request not found")
 
-    if r.status in (RequestStatus.RUNNING, RequestStatus.VERIFYING, RequestStatus.COMPLETED):
+    if r.requested_by != current_user.id and current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the operator who submitted this request can withdraw it.",
+        )
+
+    if r.status != RequestStatus.PENDING_APPROVAL:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot cancel request in status '{r.status.value}'",
+            detail=f"Only requests waiting for approval can be withdrawn (current status: {getattr(r.status, 'value', r.status)}).",
         )
 
     r.status = RequestStatus.CANCELLED
@@ -208,4 +215,5 @@ async def cancel_wipe_request(
     )
     await session.commit()
     await session.refresh(r)
-    return WipeRequestResponse.model_validate(r)
+    await ws_manager.broadcast_global({"type": "request.updated", "request_id": str(r.id), "status": "CANCELLED"})
+    return await build_request_view(session, r)

@@ -1,4 +1,4 @@
-"""Database seed script creating 4 default users and 16 realistic devices across all 14 categories."""
+"""Database seed script creating 3 default users (Admin, Operator, Approver) and 16 realistic devices across all 14 categories."""
 
 import asyncio
 import uuid
@@ -36,27 +36,21 @@ from backend.models import (
 USERS_SEED = [
     {
         "email": "operator@securewipe.local",
-        "name": "Alex Vance (Lead Operator)",
+        "name": "Alex Vance (Operator)",
         "password": "Operator123!",
         "role": UserRole.OPERATOR,
     },
     {
         "email": "approver@securewipe.local",
-        "name": "Sarah Connor (Security Approver)",
+        "name": "Sarah Connor (Approving Authority)",
         "password": "Approver123!",
         "role": UserRole.APPROVER,
     },
     {
         "email": "admin@securewipe.local",
-        "name": "Marcus Wright (Platform Administrator)",
+        "name": "Marcus Wright (Asset Administrator)",
         "password": "Admin123!",
         "role": UserRole.ADMIN,
-    },
-    {
-        "email": "auditor@securewipe.local",
-        "name": "Elena Rostova (Compliance Auditor)",
-        "password": "Auditor123!",
-        "role": UserRole.AUDITOR,
     },
 ]
 

@@ -111,16 +111,25 @@ Visit the frontend at **`http://127.0.0.1:5173`**.
 
 ---
 
-## 4. Default Seeded Personas
+## 4. Roles and Dashboards
 
-The application includes four pre-configured personas with quick-login selectors in the top navigation bar:
+The platform has exactly **three roles**, and each one signs in to its own dashboard:
 
-| Persona | Email | Password | Role | Primary Permissions |
-| :--- | :--- | :--- | :--- | :--- |
-| **Alex Vance** | `operator@securewipe.local` | `Operator123!` | `OPERATOR` | Asset inspection, wipe requests, starting approved jobs. |
-| **Sarah Connor** | `approver@securewipe.local` | `Approver123!` | `APPROVER` | Dual-custody review, four-eyes gate, single-use token issuance. |
-| **Marcus Wright** | `admin@securewipe.local` | `Admin123!` | `ADMIN` | Second approver for high risk, user management, certificate revocation. |
-| **Elena Rostova** | `auditor@securewipe.local` | `Auditor123!` | `AUDITOR` | Compliance audit, public key inspection, hash chain verification. |
+| Role | Demo login | Password | Dashboard |
+| :--- | :--- | :--- | :--- |
+| **Admin** (asset registry) | `admin@securewipe.local` | `Admin123!` | Registers and manages every office device (manual form, browser detection, CSV import), sees certificate status per device, manages users, audit log. |
+| **Operator** (device owner / user) | `operator@securewipe.local` | `Operator123!` | Picks a registered device and submits a wipe-certificate request, tracks it live (Requested → Approved → Data wiped → Certificate) and downloads the signed PDF. |
+| **Approver** (certifying authority) | `approver@securewipe.local` | `Approver123!` | Reviews pending requests and approves or rejects them (rejection needs a reason the operator sees). |
+
+### Certificate workflow
+
+1. **Admin** adds the device to the registry.
+2. **Operator** requests a certificate for it (confirms by typing the serial number). Only one open request per device.
+3. **Approver** approves or rejects. A requester can never approve their own request.
+4. On approval the simulated NIST SP 800-88 wipe is queued automatically, verified, and an **Ed25519-signed PDF certificate** with a verification QR code is issued.
+5. The Operator (and Admin/Approver) download the PDF; anyone can verify it at `/verify`.
+
+Screenshots of each dashboard are in [`docs/screenshots/roles`](docs/screenshots/roles).
 
 ---
 

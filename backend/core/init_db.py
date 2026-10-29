@@ -91,9 +91,9 @@ BEGIN
         RETURN NEW;
     ELSIF OLD.status = 'QUEUED' AND NEW.status IN ('RUNNING', 'CANCELLED', 'FAILED') THEN
         RETURN NEW;
-    ELSIF OLD.status = 'RUNNING' AND NEW.status IN ('VERIFYING', 'FAILED') THEN
+    ELSIF OLD.status = 'RUNNING' AND NEW.status IN ('VERIFYING', 'FAILED', 'CANCELLED') THEN
         RETURN NEW;
-    ELSIF OLD.status = 'VERIFYING' AND NEW.status IN ('COMPLETED', 'FAILED') THEN
+    ELSIF OLD.status = 'VERIFYING' AND NEW.status IN ('COMPLETED', 'FAILED', 'CANCELLED') THEN
         RETURN NEW;
     ELSE
         RAISE EXCEPTION 'Illegal wipe request transition from % to %', OLD.status, NEW.status;
@@ -202,9 +202,9 @@ async def init_database() -> None:
                     RETURN NEW;
                 ELSIF OLD.status = 'QUEUED' AND NEW.status IN ('RUNNING', 'CANCELLED', 'FAILED') THEN
                     RETURN NEW;
-                ELSIF OLD.status = 'RUNNING' AND NEW.status IN ('VERIFYING', 'FAILED') THEN
+                ELSIF OLD.status = 'RUNNING' AND NEW.status IN ('VERIFYING', 'FAILED', 'CANCELLED') THEN
                     RETURN NEW;
-                ELSIF OLD.status = 'VERIFYING' AND NEW.status IN ('COMPLETED', 'FAILED') THEN
+                ELSIF OLD.status = 'VERIFYING' AND NEW.status IN ('COMPLETED', 'FAILED', 'CANCELLED') THEN
                     RETURN NEW;
                 ELSE
                     RAISE EXCEPTION 'Illegal wipe request transition from % to %', OLD.status, NEW.status;
@@ -223,6 +223,12 @@ async def init_database() -> None:
 
         for stmt in statements:
             await conn.execute(text(stmt.strip()))
+
+        # The legacy fourth role (AUDITOR) has been removed. Deactivate any such
+        # accounts left over from older databases so they can no longer sign in.
+        await conn.execute(
+            text("UPDATE users SET role = 'OPERATOR', is_active = false WHERE role = 'AUDITOR'")
+        )
 
 
 if __name__ == "__main__":

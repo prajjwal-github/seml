@@ -22,6 +22,10 @@ import { LoadingSkeleton } from '../components/common/LoadingSkeleton';
 import { WipeRequestWizardModal } from './WipeRequestWizardModal';
 import { formatBytes, formatDate } from '../lib/utils';
 import { useAuthStore } from '../store/authStore';
+import { ACTIVE_STATUSES, certStatusLabel, formatMethod } from '../lib/roles';
+import { useLiveRefresh } from '../lib/useLiveRefresh';
+import { RequestProgress } from '../components/common/RequestProgress';
+import { DownloadCertificateButton } from '../components/common/DownloadCertificateButton';
 
 export const DeviceDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -52,6 +56,8 @@ export const DeviceDetailPage: React.FC = () => {
     fetchDeviceData();
   }, [id]);
 
+  useLiveRefresh(fetchDeviceData, requests.some((r) => ACTIVE_STATUSES.includes(r.status)));
+
   if (loading || !device) {
     return (
       <div className="space-y-6 max-w-5xl mx-auto">
@@ -60,8 +66,8 @@ export const DeviceDetailPage: React.FC = () => {
     );
   }
 
-  const pendingRequest = requests.find((r) => r.status === 'PENDING_APPROVAL');
-  const approvedRequest = requests.find((r) => r.status === 'APPROVED');
+  const activeRequest = requests.find((r) => ACTIVE_STATUSES.includes(r.status));
+  const latestStatus = requests[0]?.status ?? 'NONE';
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -72,7 +78,7 @@ export const DeviceDetailPage: React.FC = () => {
           className="inline-flex items-center space-x-1.5 text-xs text-muted-foreground hover:text-foreground mb-3 transition-colors"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          <span>Back to Device Inventory</span>
+          <span>Back to devices</span>
         </Link>
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -85,7 +91,7 @@ export const DeviceDetailPage: React.FC = () => {
                 <h1 className="text-xl font-extrabold text-foreground">
                   {device.manufacturer} {device.model}
                 </h1>
-                <StatusBadge status={device.status} />
+                <StatusBadge status={latestStatus} label={certStatusLabel(latestStatus)} />
               </div>
               <p className="text-xs text-muted-foreground font-mono mt-0.5">
                 Serial: {device.serial_number} | {device.category}
@@ -94,30 +100,32 @@ export const DeviceDetailPage: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-3">
-            {approvedRequest ? (
+            {user?.role === 'OPERATOR' &&
+              (activeRequest ? (
+                <Link
+                  to="/dashboard"
+                  className="flex items-center space-x-2 px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950 hover:bg-amber-600 transition-colors shadow-sm"
+                >
+                  <Clock className="h-4 w-4" />
+                  <span>Track request: {certStatusLabel(activeRequest.status)}</span>
+                </Link>
+              ) : (
+                <button
+                  onClick={() => setIsWizardOpen(true)}
+                  className="flex items-center space-x-2 px-4 py-2 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm"
+                >
+                  <ShieldAlert className="h-4 w-4" />
+                  <span>Request wipe certificate</span>
+                </button>
+              ))}
+            {user?.role === 'APPROVER' && activeRequest?.status === 'PENDING_APPROVAL' && (
               <Link
-                to="/jobs"
-                className="flex items-center space-x-2 px-4 py-2 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-sm"
-              >
-                <Play className="h-4 w-4" />
-                <span>Start Approved Wipe Job</span>
-              </Link>
-            ) : pendingRequest ? (
-              <Link
-                to="/approvals"
-                className="flex items-center space-x-2 px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950 font-bold hover:bg-amber-600 transition-colors shadow-sm"
+                to="/dashboard"
+                className="flex items-center space-x-2 px-4 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-slate-950 hover:bg-amber-600 transition-colors shadow-sm"
               >
                 <Clock className="h-4 w-4" />
-                <span>Review Pending Approval</span>
+                <span>Review pending request</span>
               </Link>
-            ) : (
-              <button
-                onClick={() => setIsWizardOpen(true)}
-                className="flex items-center space-x-2 px-4 py-2 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm"
-              >
-                <ShieldAlert className="h-4 w-4" />
-                <span>Clear / Wipe Device</span>
-              </button>
             )}
           </div>
         </div>
@@ -128,12 +136,13 @@ export const DeviceDetailPage: React.FC = () => {
         <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-300 text-xs flex items-start gap-3">
           <Clock className="h-5 w-5 shrink-0 text-amber-600 mt-0.5" />
           <div className="space-y-1">
-            <h4 className="font-bold">Wipe Request Successfully Created (Pending Approval)</h4>
+            <h4 className="font-bold">Certificate request submitted</h4>
             <p>
-              Under four-eyes dual-custody compliance, this wipe request cannot start until an authorized approver reviews and approves it in the Approvals Inbox.
+              Your request is now with the Approver. Once approved, the device is wiped and the signed certificate appears
+              on your dashboard for download.
             </p>
-            <Link to="/approvals" className="font-semibold underline block pt-1">
-              Navigate to Approvals Inbox &rarr;
+            <Link to="/dashboard" className="font-semibold underline block pt-1">
+              Go to my dashboard &rarr;
             </Link>
           </div>
         </div>
@@ -274,26 +283,32 @@ export const DeviceDetailPage: React.FC = () => {
 
       {/* Wipe Requests & Audit History on this Device */}
       <div className="bg-card border border-border p-5 rounded-xl shadow-sm space-y-4">
-        <h2 className="text-sm font-bold text-foreground">Wipe Requests & Sanitization History</h2>
+        <h2 className="text-sm font-bold text-foreground">Certificate requests for this device</h2>
         {requests.length === 0 ? (
           <p className="text-xs text-muted-foreground py-3">No sanitization requests have been created for this device.</p>
         ) : (
           <div className="divide-y divide-border/60 text-xs">
             {requests.map((r) => (
-              <div key={r.id} className="py-3 flex items-center justify-between">
-                <div>
+              <div key={r.id} className="py-3 grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                <div className="md:col-span-5">
                   <div className="flex items-center space-x-2">
-                    <span className="font-bold text-foreground">{r.method.replace(/_/g, ' ')}</span>
-                    <StatusBadge status={r.status} />
+                    <span className="font-bold text-foreground">{formatMethod(r.method)}</span>
+                    <StatusBadge status={r.status} label={certStatusLabel(r.status)} />
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Reason: {r.reason} | Created: {formatDate(r.created_at)}
+                    {r.requester_name} · {formatDate(r.created_at)} · Risk {r.risk_level}
                   </p>
+                  {r.decision_comment && (
+                    <p className="text-[11px] text-muted-foreground italic mt-0.5">
+                      {r.approver_name}: “{r.decision_comment}”
+                    </p>
+                  )}
                 </div>
-                <div className="text-right">
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-muted text-muted-foreground">
-                    Risk: {r.risk_level}
-                  </span>
+                <div className="md:col-span-5">
+                  <RequestProgress request={r} />
+                </div>
+                <div className="md:col-span-2 flex md:justify-end">
+                  {r.certificate_id && <DownloadCertificateButton certificateId={r.certificate_id} compact />}
                 </div>
               </div>
             ))}

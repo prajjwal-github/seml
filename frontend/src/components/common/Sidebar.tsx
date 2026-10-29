@@ -12,6 +12,8 @@ import {
   FileDown,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import { roleInfo } from '../../lib/roles';
+import { UserRole } from '../../types';
 import { cn } from '../../lib/utils';
 
 interface NavItem {
@@ -19,7 +21,6 @@ interface NavItem {
   href: string;
   icon: React.ElementType;
   badge?: number;
-  adminOnly?: boolean;
 }
 
 interface SidebarProps {
@@ -29,38 +30,40 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ pendingApprovalsCount = 0, activeJobsCount = 0 }) => {
   const { user } = useAuthStore();
+  const info = roleInfo(user?.role);
 
-  const navItems: NavItem[] = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Device Inventory', href: '/devices', icon: HardDrive },
-    {
-      name: 'Approvals Inbox',
-      href: '/approvals',
-      icon: CheckSquare,
-      badge: pendingApprovalsCount,
-    },
-    {
-      name: 'Live Wipe Jobs',
-      href: '/jobs',
-      icon: PlayCircle,
-      badge: activeJobsCount,
-    },
-    { name: 'Certificates', href: '/certificates', icon: FileCheck2 },
-    { name: 'Audit Log & Chain', href: '/audit', icon: FileSearch },
-    { name: 'Public Verification', href: '/verify', icon: ShieldCheck },
-    { name: 'Admin & Policies', href: '/admin', icon: Settings, adminOnly: true },
-  ];
+  const NAV: Record<UserRole, NavItem[]> = {
+    ADMIN: [
+      { name: 'Admin Dashboard', href: '/dashboard', icon: LayoutDashboard },
+      { name: 'Device Registry', href: '/devices', icon: HardDrive },
+      { name: 'Wipe Progress', href: '/jobs', icon: PlayCircle, badge: activeJobsCount },
+      { name: 'Certificates', href: '/certificates', icon: FileCheck2 },
+      { name: 'Audit Log', href: '/audit', icon: FileSearch },
+      { name: 'Users & Roles', href: '/admin', icon: Settings },
+    ],
+    OPERATOR: [
+      { name: 'Operator Dashboard', href: '/dashboard', icon: LayoutDashboard },
+      { name: 'Office Devices', href: '/devices', icon: HardDrive },
+      { name: 'My Certificates', href: '/certificates', icon: FileCheck2 },
+      { name: 'Verify a Certificate', href: '/verify', icon: ShieldCheck },
+    ],
+    APPROVER: [
+      { name: 'Approver Dashboard', href: '/dashboard', icon: LayoutDashboard },
+      { name: 'Approvals Inbox', href: '/approvals', icon: CheckSquare, badge: pendingApprovalsCount },
+      { name: 'Wipe Progress', href: '/jobs', icon: PlayCircle, badge: activeJobsCount },
+      { name: 'Certificates', href: '/certificates', icon: FileCheck2 },
+      { name: 'Audit Log', href: '/audit', icon: FileSearch },
+    ],
+  };
+  const navItems = user ? NAV[user.role] ?? [] : [];
 
   return (
     <aside className="w-64 border-r border-border bg-card/60 flex flex-col shrink-0 min-h-[calc(100vh-6.25rem)]">
       <div className="p-4 space-y-1">
         <div className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase px-3 py-2">
-          Sanitization Platform
+          {info ? `${info.title} · ${info.subtitle}` : 'Sanitization Platform'}
         </div>
         {navItems.map((item) => {
-          if (item.adminOnly && user?.role !== 'ADMIN') {
-            return null;
-          }
           const Icon = item.icon;
           return (
             <NavLink
@@ -113,15 +116,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ pendingApprovalsCount = 0, act
           <span className="text-[10px] font-mono uppercase bg-emerald-500/20 px-1.5 py-0.5 rounded">PDF (15p)</span>
         </a>
 
-        <div className="bg-muted/50 rounded-lg p-3 text-xs border border-border/40">
-          <div className="text-[11px] font-semibold text-foreground flex items-center justify-between">
-            <span>Dual-Custody Policy</span>
-            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono">ENFORCED</span>
+        {info && (
+          <div className="bg-muted/50 rounded-lg p-3 text-xs border border-border/40">
+            <div className="text-[11px] font-semibold text-foreground">Your role: {info.title}</div>
+            <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed">{info.description}</p>
           </div>
-          <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed">
-            Four-eyes rule active: requesters cannot self-approve. High-risk actions require 2 distinct approvers.
-          </p>
-        </div>
+        )}
       </div>
     </aside>
   );

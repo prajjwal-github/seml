@@ -14,6 +14,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useThemeStore } from '../../store/themeStore';
 import { wsClient } from '../../lib/ws';
 import { UserRole } from '../../types';
+import { ROLES, roleInfo } from '../../lib/roles';
 
 export const Navbar: React.FC = () => {
   const { user, logout, quickLogin } = useAuthStore();
@@ -99,16 +100,16 @@ export const Navbar: React.FC = () => {
             className="flex items-center space-x-2 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-border bg-background hover:bg-muted transition-colors"
           >
             <UserCheck className="h-3.5 w-3.5 text-primary" />
-            <span className="hidden sm:inline font-mono font-semibold text-primary">{user?.role || 'Guest'}</span>
+            <span className="hidden sm:inline font-semibold text-primary">{roleInfo(user?.role)?.title || 'Guest'}</span>
             <ChevronDown className="h-3 w-3 text-muted-foreground" />
           </button>
 
           {roleDropdownOpen && (
             <div className="absolute right-0 mt-2 w-56 rounded-lg bg-card border border-border shadow-xl py-2 z-50 text-xs">
               <div className="px-3 py-1.5 text-muted-foreground font-semibold border-b border-border/50 uppercase text-[10px] tracking-wider">
-                Switch Demo Persona
+                Switch role (demo)
               </div>
-              {(['OPERATOR', 'APPROVER', 'ADMIN', 'AUDITOR'] as UserRole[]).map((r) => (
+              {ROLES.map(({ role: r }) => (
                 <button
                   key={r}
                   onClick={() => handleQuickSwitch(r)}
@@ -116,7 +117,7 @@ export const Navbar: React.FC = () => {
                     user?.role === r ? 'font-bold text-primary bg-primary/5' : 'text-foreground'
                   }`}
                 >
-                  <span>{r}</span>
+                  <span>{roleInfo(r)?.title}</span>
                   {user?.role === r && <span className="text-[10px] bg-primary/20 text-primary px-1.5 rounded">Active</span>}
                 </button>
               ))}
