@@ -141,6 +141,8 @@ Netlify only serves static sites, so the React app goes on Netlify and the FastA
 2. **Frontend on Netlify**: `netlify.toml` already sets the build (`frontend/`, `npm run build`, publish `dist`) and the SPA redirect. In **Site configuration → Environment variables** add `VITE_API_URL` = the Render URL (no trailing slash), then **Deploys → Trigger deploy**.
 3. If your Netlify address is not `https://secure-wipe-seml.netlify.app`, update `PUBLIC_APP_URL` and `CORS_ORIGINS` on the Render service. Any `*.netlify.app` origin is allowed by default.
 
+**Vercel instead of Netlify:** import the repo in Vercel, set **Root Directory** to `frontend` (`frontend/vercel.json` handles the build and SPA routing), add the same `VITE_API_URL` environment variable, and deploy. The backend still runs on Render.
+
 Free Render services sleep when idle, so the first request after a pause can take about 30–60 seconds.
 
 ---

@@ -45,8 +45,8 @@ class Settings(BaseSettings):
     # Seed demo users and devices on startup when the database is empty (handy on fresh cloud hosts)
     AUTO_SEED: bool = True
 
-    # Extra allowed origins by pattern, e.g. every Netlify site and deploy preview
-    CORS_ORIGIN_REGEX: str = r"https://([a-z0-9-]+--)?[a-z0-9-]+\.netlify\.app"
+    # Extra allowed origins by pattern: every Netlify / Vercel site and preview
+    CORS_ORIGIN_REGEX: str = r"https://(([a-z0-9-]+--)?[a-z0-9-]+\.netlify\.app|[a-z0-9-]+\.vercel\.app)"
 
     # CORS
     CORS_ORIGINS: Union[List[str], str] = [
