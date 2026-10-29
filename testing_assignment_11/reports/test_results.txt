@@ -1,0 +1,88 @@
+================================================================================
+SECUREWIPE - ASSIGNMENT 11 UNIT TESTING REPORT
+================================================================================
+Execution Date:   2026-10-22 22:11:40
+Testing Framework: Python Standard Library unittest 3.x (JUnit Equivalent)
+Target Project:    SecureWipe (Certified IT Asset Sanitization Platform)
+Isolation Mode:    Strict Simulation (No live DB, No external network)
+--------------------------------------------------------------------------------
+Tests Executed:    32
+Passed:            32
+Failures:          0
+Errors:            0
+Skipped:           0
+Execution Time:    0.170 seconds
+Overall Outcome:   ALL TESTS PASSED [SUCCESS]
+================================================================================
+
+DETAILED EXECUTION TRACE:
+--------------------------------------------------------------------------------
+test_legal_transition_draft_to_pending (testing_assignment_11.tests.test_unit.TestRequestStateMachineUnit.test_legal_transition_draft_to_pending)
+TC-UT-SM-01: Verifies transition from DRAFT to PENDING_APPROVAL is allowed. ... ok
+test_legal_transition_pending_to_approved (testing_assignment_11.tests.test_unit.TestRequestStateMachineUnit.test_legal_transition_pending_to_approved)
+TC-UT-SM-02: Verifies transition from PENDING_APPROVAL to APPROVED is allowed. ... ok
+test_reflexive_transition_same_state (testing_assignment_11.tests.test_unit.TestRequestStateMachineUnit.test_reflexive_transition_same_state)
+TC-UT-SM-03: Verifies that transitioning to the identical state is a no-op. ... ok
+test_terminal_states_have_no_outbound_transitions (testing_assignment_11.tests.test_unit.TestRequestStateMachineUnit.test_terminal_states_have_no_outbound_transitions)
+TC-UT-SM-04: Verifies that terminal states (COMPLETED, REJECTED, etc.) have no outbound transitions. ... ok
+test_argon2id_password_hash_and_verify (testing_assignment_11.tests.test_unit.TestCryptographicSecurityUnit.test_argon2id_password_hash_and_verify)
+TC-UT-CRYPTO-01: Verifies password hashing and verification with Argon2id. ... ok
+test_canonical_json_deterministic_ordering (testing_assignment_11.tests.test_unit.TestCryptographicSecurityUnit.test_canonical_json_deterministic_ordering)
+TC-UT-CRYPTO-02: Verifies RFC 8785 canonical JSON produces identical byte sequences regardless of key insertion order. ... ok
+test_compute_request_fingerprint_deterministic (testing_assignment_11.tests.test_unit.TestCryptographicSecurityUnit.test_compute_request_fingerprint_deterministic)
+TC-UT-CRYPTO-06: Verifies deterministic request fingerprint calculation. ... ok
+test_ed25519_sign_and_verify_valid_signature (testing_assignment_11.tests.test_unit.TestCryptographicSecurityUnit.test_ed25519_sign_and_verify_valid_signature)
+TC-UT-CRYPTO-04: Verifies Ed25519 signing and positive signature verification. ... ok
+test_jwt_access_token_creation_and_decoding (testing_assignment_11.tests.test_unit.TestCryptographicSecurityUnit.test_jwt_access_token_creation_and_decoding)
+TC-UT-CRYPTO-05: Verifies JWT access token generation and claims decoding. ... ok
+test_sha256_hex_digest_accuracy (testing_assignment_11.tests.test_unit.TestCryptographicSecurityUnit.test_sha256_hex_digest_accuracy)
+TC-UT-CRYPTO-03: Verifies SHA-256 hexadecimal hashing matches standard test vector. ... ok
+test_hdd_clear_custom_pass_override_boundaries (testing_assignment_11.tests.test_validation.TestNISTPlannerValidation.test_hdd_clear_custom_pass_override_boundaries)
+TC-VAL-NIST-02: Boundary testing for HDD Clear with custom pass count overrides (3 and 7 passes). ... ok
+test_hdd_clear_default_single_pass_boundary (testing_assignment_11.tests.test_validation.TestNISTPlannerValidation.test_hdd_clear_default_single_pass_boundary)
+TC-VAL-NIST-01: Verifies magnetic HDD NIST Clear generates 1 overwrite pass with 15% sample rate. ... ok
+test_hdd_purge_requires_full_verification (testing_assignment_11.tests.test_validation.TestNISTPlannerValidation.test_hdd_purge_requires_full_verification)
+TC-VAL-NIST-03: Verifies magnetic HDD NIST Purge requires ATA Secure Erase and 100% verification. ... ok
+test_nvme_ssd_purge_structure (testing_assignment_11.tests.test_validation.TestNISTPlannerValidation.test_nvme_ssd_purge_structure)
+TC-VAL-NIST-05: Verifies NVMe SSD Purge sanitization structure. ... ok
+test_plan_to_dict_mandatory_simulation_mode (testing_assignment_11.tests.test_validation.TestNISTPlannerValidation.test_plan_to_dict_mandatory_simulation_mode)
+TC-VAL-NIST-07: Verifies serialized plan dictionary contains all required fields and mode is 'simulation'. ... ok
+test_removable_media_sample_percentage_boundary (testing_assignment_11.tests.test_validation.TestNISTPlannerValidation.test_removable_media_sample_percentage_boundary)
+TC-VAL-NIST-06: Verifies removable flash media (USB/SD) gets 25% verification readback. ... ok
+test_sata_ssd_purge_crypto_erase_passes (testing_assignment_11.tests.test_validation.TestNISTPlannerValidation.test_sata_ssd_purge_crypto_erase_passes)
+TC-VAL-NIST-04: Verifies SATA SSD Purge plans cryptographic key invalidation followed by block sanitize. ... ok
+test_desktop_chassis_codes_mapping (testing_assignment_11.tests.test_validation.TestChassisClassificationValidation.test_desktop_chassis_codes_mapping)
+TC-VAL-CHAS-01: Verifies standard desktop SMBIOS codes (3, 4, 6, 7) map to DESKTOP with 0.95 confidence. ... ok
+test_laptop_chassis_codes_mapping (testing_assignment_11.tests.test_validation.TestChassisClassificationValidation.test_laptop_chassis_codes_mapping)
+TC-VAL-CHAS-02: Verifies laptop/portable SMBIOS codes (8, 9, 10, 14, 31, 32) map to LAPTOP. ... ok
+test_model_keyword_fallback_heuristics (testing_assignment_11.tests.test_validation.TestChassisClassificationValidation.test_model_keyword_fallback_heuristics)
+TC-VAL-CHAS-05: Verifies model string heuristic overrides for workstations and SBCs. ... ok
+test_server_chassis_codes_mapping (testing_assignment_11.tests.test_validation.TestChassisClassificationValidation.test_server_chassis_codes_mapping)
+TC-VAL-CHAS-03: Verifies server enclosure codes (17, 23, 28) map to SERVER. ... ok
+test_unknown_and_none_chassis_fallbacks (testing_assignment_11.tests.test_validation.TestChassisClassificationValidation.test_unknown_and_none_chassis_fallbacks)
+TC-VAL-CHAS-04: Boundary test for None and unmapped chassis integer codes. ... ok
+test_illegal_direct_jump_raises_exception (testing_assignment_11.tests.test_error_cases.TestStateMachineErrorCases.test_illegal_direct_jump_raises_exception)
+TC-ERR-SM-01: Verifies attempting to jump directly from DRAFT to COMPLETED raises InvalidStateTransitionError. ... ok
+test_illegal_jump_from_pending_to_running (testing_assignment_11.tests.test_error_cases.TestStateMachineErrorCases.test_illegal_jump_from_pending_to_running)
+TC-ERR-SM-02: Verifies jumping from PENDING_APPROVAL directly to RUNNING without approval raises exception. ... ok
+test_transition_from_terminal_completed_raises_exception (testing_assignment_11.tests.test_error_cases.TestStateMachineErrorCases.test_transition_from_terminal_completed_raises_exception)
+TC-ERR-SM-03: Verifies attempting to transition out of terminal COMPLETED state raises InvalidStateTransitionError. ... ok
+test_transition_from_terminal_rejected_raises_exception (testing_assignment_11.tests.test_error_cases.TestStateMachineErrorCases.test_transition_from_terminal_rejected_raises_exception)
+TC-ERR-SM-04: Verifies attempting to transition out of terminal REJECTED state raises InvalidStateTransitionError. ... ok
+test_jwt_expired_token_raises_error (testing_assignment_11.tests.test_error_cases.TestCryptoTamperErrorCases.test_jwt_expired_token_raises_error)
+TC-ERR-CRYPTO-05: Verifies that passing an expired JWT access token raises ExpiredSignatureError. ... ok
+test_jwt_tampered_token_signature_raises_error (testing_assignment_11.tests.test_error_cases.TestCryptoTamperErrorCases.test_jwt_tampered_token_signature_raises_error)
+TC-ERR-CRYPTO-04: Verifies that altering a signed JWT token string raises InvalidSignatureError. ... ok
+test_tampered_payload_verification_fails (testing_assignment_11.tests.test_error_cases.TestCryptoTamperErrorCases.test_tampered_payload_verification_fails)
+TC-ERR-CRYPTO-01: Verifies that modifying a single character in the payload causes signature verification to fail. ... ok
+test_tampered_signature_string_verification_fails (testing_assignment_11.tests.test_error_cases.TestCryptoTamperErrorCases.test_tampered_signature_string_verification_fails)
+TC-ERR-CRYPTO-02: Verifies that corrupting the Base64 signature string causes verification to fail safely. ... ok
+test_verification_with_wrong_public_key_fails (testing_assignment_11.tests.test_error_cases.TestCryptoTamperErrorCases.test_verification_with_wrong_public_key_fails)
+TC-ERR-CRYPTO-03: Verifies that verifying a valid signature with an unassociated public key fails. ... ok
+test_isolated_audit_notification_using_mock (testing_assignment_11.tests.test_error_cases.TestMockingAndTestIsolation.test_isolated_audit_notification_using_mock)
+TC-ERR-MOCK-01: Verifies external notification service can be isolated using unittest.mock.patch. ... ok
+
+----------------------------------------------------------------------
+Ran 32 tests in 0.170s
+
+OK

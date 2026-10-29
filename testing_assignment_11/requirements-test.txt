@@ -1,0 +1,24 @@
+# =========================================================================
+# Testing Assignment 11 - Dependency Isolation Specification
+# =========================================================================
+# The test automation suite in testing_assignment_11/ utilizes Python's
+# built-in standard library `unittest` module.
+#
+# No new or external packages are required to run this assignment.
+#
+# Tested Environment:
+# - Python: 3.10+ (tested on Python 3.14.7)
+# - Standard Library modules used:
+#     - unittest (built-in)
+#     - unittest.mock (built-in)
+#     - hashlib (built-in)
+#     - json (built-in)
+#     - uuid (built-in)
+#     - datetime (built-in)
+#     - pathlib (built-in)
+#
+# Existing project dependencies used in read-only test targets:
+# - cryptography (already present in .venv)
+# - argon2-cffi (already present in .venv)
+# - PyJWT (already present in .venv)
+# =========================================================================
