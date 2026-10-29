@@ -1,9 +1,9 @@
 /**
  * Where the backend lives.
  *
- * Locally the Vite dev server proxies /api, /.well-known and /ws to FastAPI, so
- * everything stays same-origin. On a static host such as Netlify the backend runs
- * elsewhere, so set VITE_API_URL (and optionally VITE_WS_URL) at build time.
+ * The Vite dev server proxies /api, /.well-known and /ws to FastAPI, so by default
+ * everything stays same-origin. VITE_API_URL / VITE_WS_URL only need to be set if
+ * the backend runs on a different address.
  */
 export const API_ORIGIN = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
 

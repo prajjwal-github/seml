@@ -38,7 +38,7 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing database tables and PL/pgSQL triggers...")
     await init_database()
 
-    # Fresh database (e.g. a new cloud host): load the demo users and devices
+    # Fresh database: load the demo users and devices so the app works out of the box
     if settings.AUTO_SEED:
         from sqlalchemy import func, select
         from backend.seed import seed_database
@@ -79,7 +79,6 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS if isinstance(settings.CORS_ORIGINS, list) else ["*"],
-    allow_origin_regex=settings.CORS_ORIGIN_REGEX or None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

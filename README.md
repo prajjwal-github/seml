@@ -84,28 +84,31 @@ docker compose up -d
 docker compose exec backend python seed.py
 ```
 
-### Option B: Local Development (Windows / Native Host)
-```bash
-# 1. Activate Python virtual environment and install dependencies
+### Option B: Run locally from VS Code (Windows)
+
+Prerequisites: Python 3.12+, Node.js 20+, PostgreSQL (the scripts expect it on port **5434**, user/password `postgres`/`postgres`, database `securewipe`).
+
+One-time setup (VS Code terminal, in the repo folder):
+```powershell
 python -m venv .venv
 .\.venv\Scripts\activate
 pip install -r backend/requirements.txt
-pip install -e agent/
-
-# 2. Start PostgreSQL daemon (e.g. port 5434)
-& "C:\Program Files\PostgreSQL\18\bin\postgres.exe" -D "d:\seml\pgdata" -p 5434
-
-# 3. Apply database migrations and seed data
-python backend/seed.py
-
-# 4. Start FastAPI backend
-uvicorn backend.app.main:app --host 127.0.0.1 --port 8001
-
-# 5. Start Vite frontend
-cd frontend
-npm install
-npm run dev
+cd frontend; npm install; cd ..
 ```
+
+Every time:
+```powershell
+.\run.ps1        # or run.bat: starts PostgreSQL (5434), the API (8001) and the website (5173)
+```
+
+Or start the pieces by hand in three terminals:
+```powershell
+& "C:\Program Files\PostgreSQL\18\bin\postgres.exe" -D ".\pgdata" -p 5434
+.\.venv\Scripts\uvicorn backend.app.main:app --host 127.0.0.1 --port 8001 --reload
+cd frontend; npm run dev
+```
+
+On first start the backend creates the tables and loads the three demo accounts and 16 sample devices automatically (you can also run `python -m backend.seed`).
 
 Visit the frontend at **`http://127.0.0.1:5173`**.
 
@@ -130,20 +133,6 @@ The platform has exactly **three roles**, and each one signs in to its own dashb
 5. The Operator (and Admin/Approver) download the PDF; anyone can verify it at `/verify`.
 
 Screenshots of each dashboard are in [`docs/screenshots/roles`](docs/screenshots/roles).
-
----
-
-## Deploying (Netlify frontend + Render backend)
-
-Netlify only serves static sites, so the React app goes on Netlify and the FastAPI backend (PostgreSQL, background wipe worker, WebSockets) goes on Render's free tier.
-
-1. **Backend on Render**: Render dashboard → **New → Blueprint** → pick this repo → **Apply**. `render.yaml` creates the API service and a PostgreSQL database. On first start the database is seeded with the three demo accounts. Copy the service URL, e.g. `https://securewipe-api.onrender.com`.
-2. **Frontend on Netlify**: `netlify.toml` already sets the build (`frontend/`, `npm run build`, publish `dist`) and the SPA redirect. In **Site configuration → Environment variables** add `VITE_API_URL` = the Render URL (no trailing slash), then **Deploys → Trigger deploy**.
-3. If your Netlify address is not `https://secure-wipe-seml.netlify.app`, update `PUBLIC_APP_URL` and `CORS_ORIGINS` on the Render service. Any `*.netlify.app` origin is allowed by default.
-
-**Vercel instead of Netlify:** import the repo in Vercel, set **Root Directory** to `frontend` (`frontend/vercel.json` handles the build and SPA routing), add the same `VITE_API_URL` environment variable, and deploy. The backend still runs on Render.
-
-Free Render services sleep when idle, so the first request after a pause can take about 30–60 seconds.
 
 ---
 

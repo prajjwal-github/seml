@@ -42,11 +42,9 @@ class Settings(BaseSettings):
     # Public URL of the web app, used for the verification link / QR code on certificates
     PUBLIC_APP_URL: str = "http://localhost:5173"
 
-    # Seed demo users and devices on startup when the database is empty (handy on fresh cloud hosts)
+    # Seed demo users and devices on startup when the database is empty (a fresh local database works out of the box)
     AUTO_SEED: bool = True
 
-    # Extra allowed origins by pattern: every Netlify / Vercel site and preview
-    CORS_ORIGIN_REGEX: str = r"https://(([a-z0-9-]+--)?[a-z0-9-]+\.netlify\.app|[a-z0-9-]+\.vercel\.app)"
 
     # CORS
     CORS_ORIGINS: Union[List[str], str] = [
@@ -81,7 +79,7 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def normalise_database_url(cls, v: Any) -> Any:
-        """Accepts plain postgres:// URLs from hosting providers (Render, Neon, Supabase...)."""
+        """Accepts plain postgres:// / postgresql:// URLs as well as the asyncpg form."""
         if isinstance(v, str):
             for prefix in ("postgres://", "postgresql://", "postgresql+psycopg://"):
                 if v.startswith(prefix):
